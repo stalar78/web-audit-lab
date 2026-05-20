@@ -53,6 +53,7 @@ Automated checks currently include:
 - `h1` extraction;
 - link count;
 - basic image alt checks (`img` without alt or empty alt);
+- basic accessibility checks (accessible names, form labels, landmarks);
 - responsive mobile layout signals (horizontal overflow and visible text length);
 - browser console/page errors;
 - full-page desktop and mobile screenshots.
@@ -60,7 +61,7 @@ Automated checks currently include:
 ## 4. Review Screenshots
 
 1. Open `reports/<site-id>/` and read the newest Markdown report (`audit-<timestamp>.md`) first.
-2. Review SEO/technical issue sections in the Markdown report before manual visual checks.
+2. Review SEO/technical/accessibility issue sections in the Markdown report before manual visual checks.
 3. Review broken internal link sections in the Markdown report and prioritize high-traffic navigation paths.
 4. Open JSON report (`audit-<timestamp>.json`) only if raw fields/details are needed.
 5. Open desktop screenshots in `screenshots/<site-id>/`.

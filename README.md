@@ -10,6 +10,7 @@ This repository is used to run repeatable website audits and capture evidence:
 - basic SEO/technical signals (status, metadata, canonical, lang, viewport, Open Graph);
 - internal link status checks for broken navigation targets;
 - responsive mobile layout signals (overflow and visible-content sanity checks);
+- basic accessibility signals (accessible names, labels, landmarks, image alt coverage);
 - MCP-assisted manual inspection;
 - JSON reports for machine-readable findings;
 - screenshots for visual proof.

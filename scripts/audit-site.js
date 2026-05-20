@@ -216,6 +216,221 @@ function getDefaultResponsive() {
     };
 }
 
+function getDefaultAccessibility() {
+    return {
+        buttonsTotal: 0,
+        buttonsWithoutAccessibleName: 0,
+        linksTotal: 0,
+        linksWithoutAccessibleName: 0,
+        formControlsTotal: 0,
+        formControlsWithoutLabel: 0,
+        formControlsWithPlaceholderOnly: 0,
+        imagesTotal: 0,
+        imagesWithoutAlt: 0,
+        hasHeader: false,
+        hasMain: false,
+        hasNav: false,
+        hasFooter: false,
+        landmarks: {
+            header: false,
+            main: false,
+            nav: false,
+            footer: false
+        },
+        items: {
+            buttonsWithoutAccessibleName: [],
+            linksWithoutAccessibleName: [],
+            formControlsWithoutLabel: []
+        }
+    };
+}
+
+async function collectAccessibilityData(page) {
+    return page.evaluate(() => {
+        const trimText = (value) =>
+            typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+
+        const getLabelledByText = (element) => {
+            const labelledBy = trimText(element.getAttribute("aria-labelledby"));
+            if (!labelledBy) {
+                return "";
+            }
+
+            return labelledBy
+                .split(/\s+/)
+                .map((id) => {
+                    const target = document.getElementById(id);
+                    return target ? trimText(target.textContent || "") : "";
+                })
+                .filter(Boolean)
+                .join(" ");
+        };
+
+        const getButtonOrLinkName = (element) => {
+            const ariaLabel = trimText(element.getAttribute("aria-label"));
+            if (ariaLabel) {
+                return ariaLabel;
+            }
+
+            const labelledByText = getLabelledByText(element);
+            if (labelledByText) {
+                return labelledByText;
+            }
+
+            const title = trimText(element.getAttribute("title"));
+            if (title) {
+                return title;
+            }
+
+            if (element instanceof HTMLInputElement) {
+                const value = trimText(element.value || "");
+                if (value) {
+                    return value;
+                }
+            }
+
+            return trimText(element.textContent || "");
+        };
+
+        const hasAssociatedForLabel = (control) => {
+            const controlId = trimText(control.id || "");
+            if (!controlId) {
+                return false;
+            }
+
+            const labels = Array.from(document.querySelectorAll("label[for]"));
+            return labels.some((label) => trimText(label.getAttribute("for")) === controlId);
+        };
+
+        const buttons = Array.from(
+            document.querySelectorAll(
+                "button, input[type='button'], input[type='submit'], input[type='reset']"
+            )
+        );
+        const buttonsWithoutAccessibleName = [];
+        for (const button of buttons) {
+            if (!getButtonOrLinkName(button)) {
+                buttonsWithoutAccessibleName.push({
+                    tag: button.tagName.toLowerCase(),
+                    text: trimText(button.textContent || ""),
+                    type: trimText(button.getAttribute("type") || "")
+                });
+            }
+        }
+
+        const links = Array.from(document.querySelectorAll("a")).filter((link) => {
+            const href = trimText(link.getAttribute("href"));
+            if (!href || href === "#") {
+                return false;
+            }
+
+            const lowerHref = href.toLowerCase();
+            if (
+                href.startsWith("#") ||
+                lowerHref.startsWith("mailto:") ||
+                lowerHref.startsWith("tel:") ||
+                lowerHref.startsWith("javascript:")
+            ) {
+                return false;
+            }
+
+            return true;
+        });
+
+        const linksWithoutAccessibleName = [];
+        for (const link of links) {
+            if (!getButtonOrLinkName(link)) {
+                linksWithoutAccessibleName.push({
+                    href: trimText(link.getAttribute("href") || ""),
+                    text: trimText(link.textContent || "")
+                });
+            }
+        }
+
+        const controls = Array.from(
+            document.querySelectorAll("input, select, textarea")
+        ).filter((control) => {
+            if (!(control instanceof HTMLElement)) {
+                return false;
+            }
+
+            if (control instanceof HTMLInputElement) {
+                const inputType = trimText(control.type || "").toLowerCase();
+                if (inputType === "hidden") {
+                    return false;
+                }
+            }
+
+            return true;
+        });
+
+        const formControlsWithoutLabel = [];
+        let formControlsWithPlaceholderOnly = 0;
+        for (const control of controls) {
+            const hasWrappingLabel = Boolean(control.closest("label"));
+            const hasForLabel = hasAssociatedForLabel(control);
+            const hasAriaLabel = Boolean(trimText(control.getAttribute("aria-label")));
+            const hasAriaLabelledBy = Boolean(getLabelledByText(control));
+            const hasTitle = Boolean(trimText(control.getAttribute("title")));
+            const hasPlaceholder = Boolean(trimText(control.getAttribute("placeholder")));
+
+            const hasStrongLabel =
+                hasWrappingLabel ||
+                hasForLabel ||
+                hasAriaLabel ||
+                hasAriaLabelledBy ||
+                hasTitle;
+
+            if (!hasStrongLabel && hasPlaceholder) {
+                formControlsWithPlaceholderOnly += 1;
+            }
+
+            if (!hasStrongLabel && !hasPlaceholder) {
+                formControlsWithoutLabel.push({
+                    tag: control.tagName.toLowerCase(),
+                    type: trimText(control.getAttribute("type") || ""),
+                    name: trimText(control.getAttribute("name") || "")
+                });
+            }
+        }
+
+        const images = Array.from(document.querySelectorAll("img"));
+        const imagesWithoutAlt = images.filter((img) => {
+            const alt = img.getAttribute("alt");
+            return alt === null || trimText(alt) === "";
+        });
+
+        const landmarks = {
+            header: Boolean(document.querySelector("header, [role='banner']")),
+            main: Boolean(document.querySelector("main, [role='main']")),
+            nav: Boolean(document.querySelector("nav, [role='navigation']")),
+            footer: Boolean(document.querySelector("footer, [role='contentinfo']"))
+        };
+
+        return {
+            buttonsTotal: buttons.length,
+            buttonsWithoutAccessibleName: buttonsWithoutAccessibleName.length,
+            linksTotal: links.length,
+            linksWithoutAccessibleName: linksWithoutAccessibleName.length,
+            formControlsTotal: controls.length,
+            formControlsWithoutLabel: formControlsWithoutLabel.length,
+            formControlsWithPlaceholderOnly,
+            imagesTotal: images.length,
+            imagesWithoutAlt: imagesWithoutAlt.length,
+            hasHeader: landmarks.header,
+            hasMain: landmarks.main,
+            hasNav: landmarks.nav,
+            hasFooter: landmarks.footer,
+            landmarks,
+            items: {
+                buttonsWithoutAccessibleName,
+                linksWithoutAccessibleName,
+                formControlsWithoutLabel
+            }
+        };
+    });
+}
+
 async function auditMobileResponsive(browser, site, pagePath, url) {
     const mobilePage = await browser.newPage({
         viewport: {
@@ -564,7 +779,7 @@ function buildIssues(result) {
         addIssue(
             issues,
             "warning",
-            "technical",
+            "accessibility",
             `Images without alt found (${result.imagesWithoutAlt.length}).`
         );
     }
@@ -616,6 +831,60 @@ function buildIssues(result) {
                 }`
             );
         }
+    }
+
+    const accessibility = result.accessibility;
+
+    if (accessibility.buttonsWithoutAccessibleName > 0) {
+        addIssue(
+            issues,
+            "warning",
+            "accessibility",
+            `Buttons without accessible name: ${accessibility.buttonsWithoutAccessibleName}.`
+        );
+    }
+
+    if (accessibility.linksWithoutAccessibleName > 0) {
+        addIssue(
+            issues,
+            "warning",
+            "accessibility",
+            `Links without accessible name: ${accessibility.linksWithoutAccessibleName}.`
+        );
+    }
+
+    if (accessibility.formControlsWithoutLabel > 0) {
+        addIssue(
+            issues,
+            "warning",
+            "accessibility",
+            `Form controls without label: ${accessibility.formControlsWithoutLabel}.`
+        );
+    }
+
+    if (accessibility.formControlsWithPlaceholderOnly > 0) {
+        addIssue(
+            issues,
+            "info",
+            "accessibility",
+            `Form controls using placeholder as only label: ${accessibility.formControlsWithPlaceholderOnly}.`
+        );
+    }
+
+    if (!accessibility.hasMain) {
+        addIssue(issues, "warning", "accessibility", "Main landmark is missing.");
+    }
+
+    if (!accessibility.hasHeader) {
+        addIssue(issues, "info", "accessibility", "Header landmark is missing.");
+    }
+
+    if (!accessibility.hasNav) {
+        addIssue(issues, "info", "accessibility", "Nav landmark is missing.");
+    }
+
+    if (!accessibility.hasFooter) {
+        addIssue(issues, "info", "accessibility", "Footer landmark is missing.");
     }
 
     const mobile = result.responsive.mobile;
@@ -762,6 +1031,32 @@ function buildSiteSummary(siteResults) {
         0
     );
 
+    const pagesWithAccessibilityIssues = siteResults.filter((result) =>
+        result.issues.some((issue) => issue.category === "accessibility")
+    ).length;
+
+    const totalAccessibilityWarnings = siteResults.reduce(
+        (count, result) =>
+            count +
+            result.issues.filter(
+                (issue) =>
+                    issue.category === "accessibility" &&
+                    issue.severity === "warning"
+            ).length,
+        0
+    );
+
+    const totalAccessibilityErrors = siteResults.reduce(
+        (count, result) =>
+            count +
+            result.issues.filter(
+                (issue) =>
+                    issue.category === "accessibility" &&
+                    issue.severity === "error"
+            ).length,
+        0
+    );
+
     return {
         totalPagesAudited: siteResults.length,
         successfulPages,
@@ -779,7 +1074,10 @@ function buildSiteSummary(siteResults) {
         pagesWithBrokenLinks,
         pagesWithResponsiveIssues,
         totalResponsiveWarnings,
-        totalResponsiveErrors
+        totalResponsiveErrors,
+        pagesWithAccessibilityIssues,
+        totalAccessibilityWarnings,
+        totalAccessibilityErrors
     };
 }
 
@@ -811,6 +1109,9 @@ function renderMarkdownReport(site, generatedAt, siteResults, summary) {
         `- Pages with responsive issues: ${summary.pagesWithResponsiveIssues}`,
         `- Total responsive warnings: ${summary.totalResponsiveWarnings}`,
         `- Total responsive errors: ${summary.totalResponsiveErrors}`,
+        `- Pages with accessibility issues: ${summary.pagesWithAccessibilityIssues}`,
+        `- Total accessibility warnings: ${summary.totalAccessibilityWarnings}`,
+        `- Total accessibility errors: ${summary.totalAccessibilityErrors}`,
         "",
         "## Page Results"
     ];
@@ -838,6 +1139,12 @@ function renderMarkdownReport(site, generatedAt, siteResults, summary) {
         );
         lines.push(
             `- Link summary: total=${result.links.total}, internal=${result.links.internal}, external=${result.links.external}, special=${result.links.special}, empty=${result.links.empty}, checked=${result.links.checked}, broken=${result.links.broken}, skipped=${result.links.skipped}`
+        );
+        lines.push(
+            `- Accessibility summary: buttons=${result.accessibility.buttonsTotal} (without name: ${result.accessibility.buttonsWithoutAccessibleName}), links=${result.accessibility.linksTotal} (without name: ${result.accessibility.linksWithoutAccessibleName}), form controls=${result.accessibility.formControlsTotal} (without label: ${result.accessibility.formControlsWithoutLabel}), images=${result.accessibility.imagesTotal} (without alt: ${result.accessibility.imagesWithoutAlt})`
+        );
+        lines.push(
+            `- Landmarks: header=${result.accessibility.landmarks.header ? "Yes" : "No"}, main=${result.accessibility.landmarks.main ? "Yes" : "No"}, nav=${result.accessibility.landmarks.nav ? "Yes" : "No"}, footer=${result.accessibility.landmarks.footer ? "Yes" : "No"}`
         );
         lines.push("- Mobile responsive:");
         lines.push(
@@ -986,6 +1293,7 @@ async function auditPage(
         imagesWithoutAlt: [],
         screenshotPath: null,
         responsive: getDefaultResponsive(),
+        accessibility: getDefaultAccessibility(),
         seo: null,
         issues: [],
         errors: [],
@@ -1049,6 +1357,10 @@ async function auditPage(
                 }))
             )
             .catch(() => []);
+
+        result.accessibility = await collectAccessibilityData(page).catch(() =>
+            getDefaultAccessibility()
+        );
 
         result.links = await buildLinksData(
             page,
@@ -1116,6 +1428,10 @@ async function auditPage(
 
         if (!result.responsive) {
             result.responsive = getDefaultResponsive();
+        }
+
+        if (!result.accessibility) {
+            result.accessibility = getDefaultAccessibility();
         }
 
         if (mobileAuditEnabled && !mobileAuditCompleted) {

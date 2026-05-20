@@ -20,10 +20,12 @@ Use this checklist during every audit pass.
 
 ## Accessibility Basics
 
+- [ ] Buttons have accessible names (text, `aria-label`, `aria-labelledby`, or `title`).
+- [ ] Actionable links have accessible names.
+- [ ] Form controls have labels (label, aria-label, aria-labelledby, or title).
+- [ ] Placeholder-only form labels are minimized and reviewed.
 - [ ] Images have non-empty `alt` where required.
-- [ ] Headings follow logical structure.
-- [ ] Interactive elements appear keyboard-reachable.
-- [ ] Link/button text is descriptive (not generic "click here").
+- [ ] Landmarks exist (`main` required, `header`/`nav`/`footer` reviewed).
 
 ## Mobile Layout
 
