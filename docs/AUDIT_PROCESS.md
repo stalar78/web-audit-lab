@@ -57,16 +57,17 @@ Automated checks currently include:
 ## 4. Review Screenshots
 
 1. Open `reports/<site-id>/` and read the newest Markdown report (`audit-<timestamp>.md`) first.
-2. Open JSON report (`audit-<timestamp>.json`) only if raw fields/details are needed.
-3. Open `screenshots/<site-id>/`.
-4. Check desktop layout consistency across key pages.
-5. Spot obvious visual defects:
+2. Review SEO/technical issue sections in the Markdown report before manual visual checks.
+3. Open JSON report (`audit-<timestamp>.json`) only if raw fields/details are needed.
+4. Open `screenshots/<site-id>/`.
+5. Check desktop layout consistency across key pages.
+6. Spot obvious visual defects:
    - broken sections;
    - overlapping content;
    - hidden text;
    - missing images/icons;
    - unexpected blank states.
-6. Cross-check screenshot issues with report errors.
+7. Cross-check screenshot issues with report errors and reported page issues.
 
 ## 5. Log Findings
 

@@ -7,6 +7,7 @@ External Playwright/MCP workspace for auditing multiple public websites.
 This repository is used to run repeatable website audits and capture evidence:
 
 - automated browser checks via Playwright;
+- basic SEO/technical signals (status, metadata, canonical, lang, viewport, Open Graph);
 - MCP-assisted manual inspection;
 - JSON reports for machine-readable findings;
 - screenshots for visual proof.
@@ -83,6 +84,7 @@ Multiple ids are also supported:
 - Reports: `reports/<site-id>/`
   - Per-site JSON report: `audit-YYYY-MM-DDTHH-mm-ss-sssZ.json`
   - Per-site Markdown report: `audit-YYYY-MM-DDTHH-mm-ss-sssZ.md`
+  - Includes SEO/technical issue summaries and per-page issue lists
 - Screenshots: `screenshots/<site-id>/`
   - One full-page PNG per audited path
 

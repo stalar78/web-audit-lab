@@ -11,9 +11,11 @@ Use this checklist during every audit pass.
 
 ## SEO Basics
 
-- [ ] Unique, meaningful `<title>` per page.
-- [ ] Meta description present and relevant.
-- [ ] One clear primary `<h1>` per page.
+- [ ] `<title>` is present and length is roughly 20-70 characters.
+- [ ] Meta description is present and length is roughly 50-170 characters.
+- [ ] Exactly one clear `<h1>` exists on key pages.
+- [ ] Canonical link is present on indexable pages.
+- [ ] Open Graph title/description/image are present on key landing pages.
 - [ ] Internal links are crawlable and not obviously broken.
 
 ## Accessibility Basics
@@ -64,3 +66,10 @@ Use this checklist during every audit pass.
 - [ ] No new high-severity issues introduced.
 - [ ] Critical user flows still work.
 - [ ] Screenshots are compared against previous baseline.
+
+## Technical Page Signals
+
+- [ ] HTTP status is valid (no missing status, no 5xx on audited pages).
+- [ ] `html lang` attribute is present.
+- [ ] `meta viewport` tag is present.
+- [ ] Robots directives are present where required by SEO policy.
