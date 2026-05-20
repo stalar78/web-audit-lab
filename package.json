@@ -4,7 +4,8 @@
     "description": "External MCP and Playwright audit workspace for multiple websites.",
     "main": "scripts/audit-site.js",
     "scripts": {
-        "audit": "node scripts/audit-site.js"
+        "audit": "node scripts/audit-site.js",
+        "report:latest": "node scripts/latest-report.js"
     },
     "keywords": [
         "playwright",

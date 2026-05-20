@@ -41,6 +41,7 @@ cmd /c "set SITE_ID=<site-id>&&npm run audit"
 1. Execute the audit command.
 2. Confirm script output ends with `Audit completed.`
 3. Capture the generated report path under `reports/`.
+4. Run `npm run report:latest` to quickly find the newest Markdown report per site.
 
 Automated checks currently include:
 

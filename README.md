@@ -86,6 +86,20 @@ Multiple ids are also supported:
 - Screenshots: `screenshots/<site-id>/`
   - One full-page PNG per audited path
 
+## Find Latest Markdown Reports
+
+Use the helper command to quickly locate the newest human-readable report file:
+
+```bash
+npm run report:latest
+```
+
+For one site:
+
+```bash
+npm run report:latest -- localkit
+```
+
 ## MCP Setup
 
 MCP server config is stored in `.vscode/mcp.json` and uses:
