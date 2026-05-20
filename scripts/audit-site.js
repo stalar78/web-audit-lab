@@ -76,6 +76,29 @@ function getLinkCheckLimit() {
     return parsed;
 }
 
+function getMobileAuditEnabled() {
+    const rawValue = process.env.MOBILE_AUDIT;
+
+    if (!rawValue) {
+        return true;
+    }
+
+    const normalized = rawValue.trim().toLowerCase();
+
+    if (normalized === "1" || normalized === "true") {
+        return true;
+    }
+
+    if (normalized === "0" || normalized === "false") {
+        return false;
+    }
+
+    console.warn(
+        `Invalid MOBILE_AUDIT value: "${rawValue}". Expected one of: 1, true, 0, false. Falling back to enabled mobile audit.`
+    );
+    return true;
+}
+
 function normalizeText(value) {
     if (typeof value !== "string") {
         return null;
@@ -174,6 +197,9 @@ function getDefaultLinks() {
 function getDefaultResponsive() {
     return {
         mobile: {
+            enabled: true,
+            skipped: false,
+            skipReason: null,
             viewport: {
                 width: MOBILE_VIEWPORT.width,
                 height: MOBILE_VIEWPORT.height
@@ -594,6 +620,10 @@ function buildIssues(result) {
 
     const mobile = result.responsive.mobile;
 
+    if (!mobile.enabled || mobile.skipped) {
+        return issues;
+    }
+
     if (mobile.errors.length > 0) {
         for (const mobileError of mobile.errors) {
             addIssue(
@@ -804,51 +834,64 @@ function renderMarkdownReport(site, generatedAt, siteResults, summary) {
         lines.push(`- Images without alt count: ${result.imagesWithoutAlt.length}`);
         lines.push(`- Screenshot path: ${result.screenshotPath}`);
         lines.push(
-            `- Mobile screenshot path: ${result.responsive.mobile.screenshotPath || "N/A"}`
+            `- Mobile screenshot path: ${result.responsive.mobile.screenshotPath || "Not generated"}`
         );
         lines.push(
             `- Link summary: total=${result.links.total}, internal=${result.links.internal}, external=${result.links.external}, special=${result.links.special}, empty=${result.links.empty}, checked=${result.links.checked}, broken=${result.links.broken}, skipped=${result.links.skipped}`
         );
         lines.push("- Mobile responsive:");
         lines.push(
+            `  - Enabled: ${result.responsive.mobile.enabled ? "Yes" : "No"}`
+        );
+        lines.push(
+            `  - Skipped: ${result.responsive.mobile.skipped ? "Yes" : "No"}`
+        );
+        if (result.responsive.mobile.skipReason) {
+            lines.push(`  - Skip reason: ${result.responsive.mobile.skipReason}`);
+        }
+        lines.push(
             `  - Viewport: ${result.responsive.mobile.viewport.width}x${result.responsive.mobile.viewport.height}`
         );
-        lines.push(
-            `  - Document width: ${
-                result.responsive.mobile.documentWidth === null
-                    ? "N/A"
-                    : result.responsive.mobile.documentWidth
-            }`
-        );
-        lines.push(
-            `  - Viewport width: ${
-                result.responsive.mobile.viewportWidth === null
-                    ? "N/A"
-                    : result.responsive.mobile.viewportWidth
-            }`
-        );
-        lines.push(
-            `  - Body scroll width: ${
-                result.responsive.mobile.bodyScrollWidth === null
-                    ? "N/A"
-                    : result.responsive.mobile.bodyScrollWidth
-            }`
-        );
-        lines.push(
-            `  - Horizontal overflow: ${
-                result.responsive.mobile.hasHorizontalOverflow ? "Yes" : "No"
-            }`
-        );
-        lines.push(
-            `  - Overflow amount: ${result.responsive.mobile.overflowAmount}px`
-        );
-        lines.push(
-            `  - Visible text length: ${
-                result.responsive.mobile.visibleTextLength === null
-                    ? "N/A"
-                    : result.responsive.mobile.visibleTextLength
-            }`
-        );
+        if (result.responsive.mobile.skipped) {
+            lines.push("  - Metrics: skipped");
+        } else {
+            lines.push(
+                `  - Document width: ${
+                    result.responsive.mobile.documentWidth === null
+                        ? "N/A"
+                        : result.responsive.mobile.documentWidth
+                }`
+            );
+            lines.push(
+                `  - Viewport width: ${
+                    result.responsive.mobile.viewportWidth === null
+                        ? "N/A"
+                        : result.responsive.mobile.viewportWidth
+                }`
+            );
+            lines.push(
+                `  - Body scroll width: ${
+                    result.responsive.mobile.bodyScrollWidth === null
+                        ? "N/A"
+                        : result.responsive.mobile.bodyScrollWidth
+                }`
+            );
+            lines.push(
+                `  - Horizontal overflow: ${
+                    result.responsive.mobile.hasHorizontalOverflow ? "Yes" : "No"
+                }`
+            );
+            lines.push(
+                `  - Overflow amount: ${result.responsive.mobile.overflowAmount}px`
+            );
+            lines.push(
+                `  - Visible text length: ${
+                    result.responsive.mobile.visibleTextLength === null
+                        ? "N/A"
+                        : result.responsive.mobile.visibleTextLength
+                }`
+            );
+        }
         lines.push("- SEO signals:");
         lines.push(
             `  - Title present: ${result.seo.titlePresent ? "Yes" : "No"} (length: ${result.seo.titleLength})`
@@ -918,7 +961,8 @@ async function auditPage(
     site,
     pagePath,
     linkStatusCache,
-    linkCheckLimit
+    linkCheckLimit,
+    mobileAuditEnabled
 ) {
     const url = normalizeUrl(site.url, pagePath);
     const page = await browser.newPage({
@@ -965,6 +1009,11 @@ async function auditPage(
     });
 
     let mobileAuditCompleted = false;
+    if (!mobileAuditEnabled) {
+        result.responsive.mobile.enabled = false;
+        result.responsive.mobile.skipped = true;
+        result.responsive.mobile.skipReason = "Skipped because MOBILE_AUDIT=0.";
+    }
 
     try {
         const response = await page.goto(url, {
@@ -1041,13 +1090,18 @@ async function auditPage(
             fullPage: true
         });
 
-        result.responsive.mobile = await auditMobileResponsive(
-            browser,
-            site,
-            pagePath,
-            url
-        );
-        mobileAuditCompleted = true;
+        if (mobileAuditEnabled) {
+            result.responsive.mobile = await auditMobileResponsive(
+                browser,
+                site,
+                pagePath,
+                url
+            );
+            result.responsive.mobile.enabled = true;
+            result.responsive.mobile.skipped = false;
+            result.responsive.mobile.skipReason = null;
+            mobileAuditCompleted = true;
+        }
 
         result.issues = buildIssues(result);
     } catch (error) {
@@ -1064,13 +1118,16 @@ async function auditPage(
             result.responsive = getDefaultResponsive();
         }
 
-        if (!mobileAuditCompleted) {
+        if (mobileAuditEnabled && !mobileAuditCompleted) {
             result.responsive.mobile = await auditMobileResponsive(
                 browser,
                 site,
                 pagePath,
                 url
             );
+            result.responsive.mobile.enabled = true;
+            result.responsive.mobile.skipped = false;
+            result.responsive.mobile.skipReason = null;
             mobileAuditCompleted = true;
         }
 
@@ -1098,6 +1155,7 @@ async function main() {
     const runTimestampIso = new Date().toISOString();
     const reportTimestamp = toReportTimestamp(runTimestampIso);
     const linkCheckLimit = getLinkCheckLimit();
+    const mobileAuditEnabled = getMobileAuditEnabled();
 
     for (const site of selectedSites) {
         console.log(`\nAuditing: ${site.name}`);
@@ -1112,7 +1170,8 @@ async function main() {
                 site,
                 pagePath,
                 linkStatusCache,
-                linkCheckLimit
+                linkCheckLimit,
+                mobileAuditEnabled
             );
             siteResults.push(result);
         }

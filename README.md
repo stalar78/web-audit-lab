@@ -93,6 +93,19 @@ Example:
 cmd /c "set LINK_CHECK_LIMIT=20&&npm run audit"
 ```
 
+Optional mobile toggle for faster triage:
+
+- `MOBILE_AUDIT=0` or `MOBILE_AUDIT=false` disables mobile responsive checks/screenshots.
+- `MOBILE_AUDIT=1` or `MOBILE_AUDIT=true` enables mobile checks (default behavior).
+
+Examples:
+
+```bat
+cmd /c npm run audit
+cmd /c "set MOBILE_AUDIT=0&&npm run audit"
+cmd /c "set MOBILE_AUDIT=0&&set SITE_ID=localkit&&npm run audit"
+```
+
 ## Output Locations
 
 - Reports: `reports/<site-id>/`

@@ -43,6 +43,7 @@ cmd /c "set SITE_ID=<site-id>&&npm run audit"
 3. Capture the generated report path under `reports/`.
 4. Run `npm run report:latest` to quickly find the newest Markdown report per site.
 5. For very link-heavy pages, optionally run with `LINK_CHECK_LIMIT` (for example `cmd /c "set LINK_CHECK_LIMIT=20&&npm run audit"`).
+6. For faster desktop/link/SEO triage runs, optionally disable mobile checks with `cmd /c "set MOBILE_AUDIT=0&&npm run audit"`.
 
 Automated checks currently include:
 
