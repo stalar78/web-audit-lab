@@ -1,0 +1,37 @@
+{
+    "sites": [
+        {
+            "id": "example-corporate",
+            "name": "Example Corporate",
+            "url": "https://example.com/",
+            "pages": [
+                "/",
+                "/about",
+                "/contact",
+                "/privacy",
+                "/terms",
+                "/404"
+            ]
+        },
+        {
+            "id": "example-shop",
+            "name": "Example Shop",
+            "url": "https://shop.example.com/",
+            "pages": [
+                "/",
+                "/catalog",
+                "/product/sample-item",
+                "/cart"
+            ]
+        },
+        {
+            "id": "example-landing",
+            "name": "Example Landing",
+            "url": "https://landing.example.com/",
+            "pages": [
+                "/",
+                "/thank-you"
+            ]
+        }
+    ]
+}

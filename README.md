@@ -35,12 +35,22 @@ npm install
 
 Targets are listed in `configs/sites.json`.
 
+- `configs/sites.json` is the active audit target list used by `npm run audit`.
+- `configs/sites.example.json` is a reference file only and is not used by the audit script.
+
 Each site object should include:
 
 - `id`: stable short identifier (used in screenshot folder names);
 - `name`: display name;
 - `url`: base URL;
 - `pages`: list of page paths to audit.
+
+Safe way to add a new site:
+
+1. Copy one object shape from `configs/sites.example.json`.
+2. Add it to the `sites` array in `configs/sites.json` with a unique `id`.
+3. Start with a small `pages` list (for example only `/`) and run an audit.
+4. Expand page coverage after the first successful run.
 
 ## Run Audit
 

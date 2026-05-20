@@ -5,34 +5,36 @@ This document defines the standard workflow for running audits in this workspace
 ## 1. Prepare Scope
 
 1. Open `configs/sites.json`.
-2. Identify the site `id`, base `url`, and required `pages`.
-3. Confirm you are auditing public/staging URLs only (never edit production code from this repo).
+2. Before adding or editing targets, check `configs/sites.example.json` for the expected schema.
+3. Identify the site `id`, base `url`, and required `pages`.
+4. Confirm you are auditing public/staging URLs only (never edit production code from this repo).
 
 ## 2. Select Target Site
 
 Option A: Audit all configured sites.
 
 ```bash
-npm run audit
+cmd /c npm run audit
 ```
 
 Option B: Audit a specific site by `id`.
 
-PowerShell:
-
-```powershell
-$env:SITE_ID="stalarvision"; npm run audit
-```
-
 `cmd.exe`:
 
 ```bat
-set SITE_ID=stalarvision && npm run audit
+cmd /c "set SITE_ID=stalarvision&&npm run audit"
 ```
 
 Option C: Audit multiple sites.
 
 - Use comma-separated ids: `SITE_ID=stalarvision,localkit`
+
+After changing `configs/sites.json`, validate immediately:
+
+```bat
+cmd /c npm run audit
+cmd /c "set SITE_ID=<site-id>&&npm run audit"
+```
 
 ## 3. Run Automated Checks
 
