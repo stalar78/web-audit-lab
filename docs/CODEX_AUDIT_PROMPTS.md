@@ -25,11 +25,12 @@ Scope:
 
 Actions:
 1) Run the automated audit flow.
-2) Review the newest report JSON in reports/.
-3) Review screenshots in screenshots/<SITE_ID>/.
-4) Identify issues across availability, SEO basics, accessibility basics, mobile layout, navigation, content, legal pages, and regression risk.
-5) Produce findings using docs/FINDINGS.md format.
-6) Provide prioritized production fix tasks (do not modify production repos).
+2) Open the newest Markdown report and read `Triage Summary` first.
+3) Review issue categories in Markdown, then open JSON only for raw details.
+4) Review screenshots in screenshots/<SITE_ID>/ and screenshots/<SITE_ID>/mobile/.
+5) Identify issues across availability, SEO basics, accessibility basics, mobile layout, navigation, content, legal pages, performance, and regression risk.
+6) Produce findings using docs/FINDINGS.md format.
+7) Provide prioritized production fix tasks (do not modify production repos).
 
 Constraints:
 - Keep this repo as an external audit workspace.
@@ -50,9 +51,10 @@ Scope:
 Actions:
 1) Confirm / is present in configs/sites.json for the site.
 2) Run automated audit for that site.
-3) Review homepage screenshot and report entry.
-4) Return findings with severity and evidence using docs/FINDINGS.md template.
-5) Suggest concise production fix tasks.
+3) Review `Triage Summary` in the newest Markdown report first.
+4) Review homepage screenshots and report entry details.
+5) Return findings with severity and evidence using docs/FINDINGS.md template.
+6) Suggest concise production fix tasks.
 ```
 
 ## Mobile Audit
@@ -63,10 +65,11 @@ Perform a mobile-focused audit for site id: <SITE_ID>.
 
 Actions:
 1) Run automated audit first.
-2) Use MCP/Playwright manual checks on mobile viewport for key pages.
-3) Validate no horizontal scroll, no clipped content, usable nav/CTA, readable typography.
-4) Record each issue in docs/FINDINGS.md format with screenshot evidence.
-5) Provide production fix tasks prioritized by user impact.
+2) Read `Triage Summary` first, then inspect responsive issues.
+3) Use MCP/Playwright manual checks on mobile viewport for key pages.
+4) Validate no horizontal scroll, no clipped content, usable nav/CTA, readable typography.
+5) Record each issue in docs/FINDINGS.md format with screenshot evidence.
+6) Provide production fix tasks prioritized by user impact.
 ```
 
 ## SEO Audit
@@ -84,9 +87,10 @@ Checks:
 
 Actions:
 1) Run automated audit.
-2) Summarize SEO findings per page.
-3) Output findings in docs/FINDINGS.md format.
-4) Propose production tasks with acceptance criteria.
+2) Read `Triage Summary` first, then focus on SEO category issues.
+3) Summarize SEO findings per page.
+4) Output findings in docs/FINDINGS.md format.
+5) Propose production tasks with acceptance criteria.
 ```
 
 ## Accessibility Audit
@@ -104,9 +108,10 @@ Checks:
 
 Actions:
 1) Run automated audit.
-2) Perform manual verification for high-impact pages.
-3) Record issues in docs/FINDINGS.md format.
-4) Recommend production fixes and verification steps.
+2) Read `Triage Summary` first, then focus on accessibility category issues.
+3) Perform manual verification for high-impact pages.
+4) Record issues in docs/FINDINGS.md format.
+5) Recommend production fixes and verification steps.
 ```
 
 ## Regression Audit After Production Fixes
@@ -117,9 +122,10 @@ Run a regression audit for site id: <SITE_ID> after production fixes.
 
 Actions:
 1) Re-run automated checks for the same site/page scope used previously.
-2) Compare latest report/screenshots with the previous baseline.
-3) Confirm fixed findings are resolved.
-4) Identify any newly introduced issues.
-5) Return status for each tracked finding: Fixed, Still Open, or Regressed.
-6) Propose follow-up production tasks only where needed.
+2) Read `Triage Summary` first to identify severity/category shifts vs baseline.
+3) Compare latest report/screenshots with the previous baseline.
+4) Confirm fixed findings are resolved.
+5) Identify any newly introduced issues.
+6) Return status for each tracked finding: Fixed, Still Open, or Regressed.
+7) Propose follow-up production tasks only where needed.
 ```

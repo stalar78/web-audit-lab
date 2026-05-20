@@ -113,7 +113,7 @@ cmd /c "set MOBILE_AUDIT=0&&set SITE_ID=localkit&&npm run audit"
 - Reports: `reports/<site-id>/`
   - Per-site JSON report: `audit-YYYY-MM-DDTHH-mm-ss-sssZ.json`
   - Per-site Markdown report: `audit-YYYY-MM-DDTHH-mm-ss-sssZ.md`
-  - Includes SEO/technical issue summaries, per-page issue lists, and broken internal link findings
+  - Includes a triage summary, SEO/technical issue summaries, per-page issue lists, and broken internal link findings
 - Screenshots:
   - Desktop: `screenshots/<site-id>/`
   - Mobile: `screenshots/<site-id>/mobile/`
@@ -143,12 +143,13 @@ MCP server config is stored in `.vscode/mcp.json` and uses:
 
 1. Update `configs/sites.json` with target sites/pages.
 2. Run `npm run audit` (or filter with `SITE_ID`).
-3. Review `reports/<site-id>/*.md` first for quick summary.
-4. Review `reports/<site-id>/*.json` when raw detailed data is needed.
-5. Review `screenshots/<site-id>/*` for visual evidence.
-6. Produce findings using `docs/FINDINGS.md` format.
-7. Convert findings into fix tasks for the relevant production repository.
-8. Re-run audits after fixes to confirm regressions are resolved.
+3. Review `reports/<site-id>/*.md` and read `Triage Summary` first.
+4. Review issue sections by category in the same Markdown report.
+5. Review `reports/<site-id>/*.json` when raw detailed data is needed.
+6. Review `screenshots/<site-id>/*` for visual evidence.
+7. Produce findings using `docs/FINDINGS.md` format.
+8. Convert findings into fix tasks for the relevant production repository.
+9. Re-run audits after fixes to confirm regressions are resolved.
 
 ## Future Improvement (Simple, Not Implemented)
 Current reports are already grouped per site. A safe next step is adding an optional lightweight index file per run (for example a small `reports/index.json`) to simplify history browsing across many audits.

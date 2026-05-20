@@ -64,19 +64,20 @@ Performance signals in this workspace are lightweight triage metrics, not Lighth
 ## 4. Review Screenshots
 
 1. Open `reports/<site-id>/` and read the newest Markdown report (`audit-<timestamp>.md`) first.
-2. Review SEO/technical/accessibility/performance issue sections in the Markdown report before manual visual checks.
-3. Review broken internal link sections in the Markdown report and prioritize high-traffic navigation paths.
-4. Open JSON report (`audit-<timestamp>.json`) only if raw fields/details are needed.
-5. Open desktop screenshots in `screenshots/<site-id>/`.
-6. Open mobile screenshots in `screenshots/<site-id>/mobile/`.
-7. Check desktop and mobile layout consistency across key pages.
-8. Spot obvious visual defects:
+2. Read `## Triage Summary` first to prioritize severe and category-specific issues.
+3. Review SEO/technical/accessibility/performance issue sections in the Markdown report.
+4. Review broken internal link sections and prioritize high-traffic navigation paths.
+5. Open JSON report (`audit-<timestamp>.json`) only if raw fields/details are needed.
+6. Open desktop screenshots in `screenshots/<site-id>/`.
+7. Open mobile screenshots in `screenshots/<site-id>/mobile/`.
+8. Check desktop and mobile layout consistency across key pages.
+9. Spot obvious visual defects:
    - broken sections;
    - overlapping content;
    - hidden text;
    - missing images/icons;
    - unexpected blank states.
-9. Cross-check screenshot issues with report errors and reported page issues.
+10. Cross-check screenshot issues with report errors and reported page issues.
 
 ## 5. Log Findings
 

@@ -1279,7 +1279,148 @@ function buildSiteSummary(siteResults) {
     };
 }
 
-function renderMarkdownReport(site, generatedAt, siteResults, summary) {
+function getSeverityRank(severity) {
+    if (severity === "error") {
+        return 3;
+    }
+
+    if (severity === "warning") {
+        return 2;
+    }
+
+    return 1;
+}
+
+function mapIssueCategory(category) {
+    if (
+        category === "seo" ||
+        category === "technical" ||
+        category === "responsive" ||
+        category === "accessibility" ||
+        category === "performance" ||
+        category === "links"
+    ) {
+        return category;
+    }
+
+    return "other";
+}
+
+function buildTriageSummary(siteResults) {
+    const triage = {
+        errorsCount: 0,
+        warningsCount: 0,
+        infoCount: 0,
+        issuesByCategory: {
+            seo: 0,
+            technical: 0,
+            links: 0,
+            responsive: 0,
+            accessibility: 0,
+            performance: 0,
+            other: 0
+        },
+        pagesRequiringAttention: [],
+        topIssues: [],
+        recommendedReviewOrder: []
+    };
+
+    const allIssues = [];
+
+    for (const result of siteResults) {
+        const pageIssues = result.issues || [];
+
+        let highestSeverity = "info";
+        for (const issue of pageIssues) {
+            if (issue.severity === "error") {
+                triage.errorsCount += 1;
+            } else if (issue.severity === "warning") {
+                triage.warningsCount += 1;
+            } else {
+                triage.infoCount += 1;
+            }
+
+            const category = mapIssueCategory(issue.category);
+            triage.issuesByCategory[category] += 1;
+
+            if (getSeverityRank(issue.severity) > getSeverityRank(highestSeverity)) {
+                highestSeverity = issue.severity;
+            }
+
+            allIssues.push({
+                pagePath: result.pagePath,
+                severity: issue.severity,
+                category: issue.category,
+                message: issue.message
+            });
+        }
+
+        if (pageIssues.length > 0) {
+            triage.pagesRequiringAttention.push({
+                pagePath: result.pagePath,
+                issueCount: pageIssues.length,
+                highestSeverity
+            });
+        }
+    }
+
+    triage.pagesRequiringAttention.sort((a, b) => {
+        const severityDelta =
+            getSeverityRank(b.highestSeverity) - getSeverityRank(a.highestSeverity);
+        if (severityDelta !== 0) {
+            return severityDelta;
+        }
+
+        return b.issueCount - a.issueCount;
+    });
+
+    triage.topIssues = allIssues
+        .slice()
+        .sort((a, b) => getSeverityRank(b.severity) - getSeverityRank(a.severity))
+        .slice(0, 10);
+
+    const hasBrokenInternalLinkIssues = allIssues.some(
+        (issue) =>
+            issue.category === "technical" &&
+            issue.message.toLowerCase().includes("internal link")
+    );
+
+    if (triage.errorsCount > 0) {
+        triage.recommendedReviewOrder.push("Review error-level issues first.");
+    }
+
+    if (hasBrokenInternalLinkIssues) {
+        triage.recommendedReviewOrder.push("Review broken internal links.");
+    }
+
+    if (triage.issuesByCategory.responsive > 0) {
+        triage.recommendedReviewOrder.push(
+            "Review mobile screenshots for responsive issues."
+        );
+    }
+
+    if (triage.issuesByCategory.accessibility > 0) {
+        triage.recommendedReviewOrder.push("Review accessibility warnings.");
+    }
+
+    if (triage.issuesByCategory.performance > 0) {
+        triage.recommendedReviewOrder.push(
+            "Review performance largest resources."
+        );
+    }
+
+    if (triage.issuesByCategory.seo > 0) {
+        triage.recommendedReviewOrder.push("Review SEO warnings.");
+    }
+
+    if (triage.recommendedReviewOrder.length === 0) {
+        triage.recommendedReviewOrder.push("No major issues detected. Review summary and screenshots.");
+    }
+
+    return triage;
+}
+
+function renderMarkdownReport(site, generatedAt, siteResults, summary, triage) {
     const lines = [
         "# Website Audit Report",
         "",
@@ -1287,6 +1428,31 @@ function renderMarkdownReport(site, generatedAt, siteResults, summary) {
         `- Site ID: ${site.id}`,
         `- Base URL: ${site.url}`,
         `- Timestamp: ${generatedAt}`,
+        "",
+        "## Triage Summary",
+        "",
+        `- Issue counts by severity: errors=${triage.errorsCount}, warnings=${triage.warningsCount}, info=${triage.infoCount}`,
+        `- Issue counts by category: seo=${triage.issuesByCategory.seo}, technical=${triage.issuesByCategory.technical}, links=${triage.issuesByCategory.links}, responsive=${triage.issuesByCategory.responsive}, accessibility=${triage.issuesByCategory.accessibility}, performance=${triage.issuesByCategory.performance}, other=${triage.issuesByCategory.other}`,
+        "- Pages requiring attention:",
+        ...(
+            triage.pagesRequiringAttention.length > 0
+                ? triage.pagesRequiringAttention.map(
+                      (page) =>
+                          `  - ${page.pagePath}: ${page.issueCount} issue(s), highest severity: ${page.highestSeverity}`
+                  )
+                : ["  - None"]
+        ),
+        "- Top issues:",
+        ...(
+            triage.topIssues.length > 0
+                ? triage.topIssues.map(
+                      (issue) =>
+                          `  - [${issue.severity}][${issue.category}] ${issue.pagePath}: ${issue.message}`
+                  )
+                : ["  - None"]
+        ),
+        "- Recommended review order:",
+        ...triage.recommendedReviewOrder.map((item) => `  - ${item}`),
         "",
         "## Summary",
         "",
@@ -1851,6 +2017,7 @@ async function main() {
         }
 
         const summary = buildSiteSummary(siteResults);
+        const triage = buildTriageSummary(siteResults);
         const siteReportDir = path.join(process.cwd(), "reports", site.id);
         ensureDir(siteReportDir);
 
@@ -1865,13 +2032,14 @@ async function main() {
             baseUrl: site.url,
             timestamp: runTimestampIso,
             summary,
+            triage,
             pages: siteResults
         };
 
         fs.writeFileSync(jsonReportPath, JSON.stringify(jsonPayload, null, 2), "utf8");
         fs.writeFileSync(
             markdownReportPath,
-            renderMarkdownReport(site, runTimestampIso, siteResults, summary),
+            renderMarkdownReport(site, runTimestampIso, siteResults, summary, triage),
             "utf8"
         );
 
