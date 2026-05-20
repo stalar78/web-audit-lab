@@ -1,4 +1,4 @@
-﻿# Web Audit Lab
+# Web Audit Lab
 
 External Playwright/MCP workspace for auditing multiple public websites.
 
@@ -113,7 +113,7 @@ cmd /c "set MOBILE_AUDIT=0&&set SITE_ID=localkit&&npm run audit"
 - Reports: `reports/<site-id>/`
   - Per-site JSON report: `audit-YYYY-MM-DDTHH-mm-ss-sssZ.json`
   - Per-site Markdown report: `audit-YYYY-MM-DDTHH-mm-ss-sssZ.md`
-  - Includes a triage summary, SEO/technical issue summaries, per-page issue lists, broken internal link findings, and failed resource URLs when available
+  - Includes a triage summary, SEO/technical issue summaries, per-page issue lists, and broken internal link findings
 - Screenshots:
   - Desktop: `screenshots/<site-id>/`
   - Mobile: `screenshots/<site-id>/mobile/`
@@ -133,6 +133,26 @@ For one site:
 npm run report:latest -- localkit
 ```
 
+## Production Fix Task Workflow
+
+Audit findings discovered in `web-audit-lab` should be converted into production fix tasks before any production repository is changed.
+
+Use:
+
+- `docs/FINDINGS.md` for raw audit findings and observations;
+- `docs/PRODUCTION_FIX_TASKS.md` for actionable production-ready tasks.
+
+The usual workflow is:
+
+1. Run the audit.
+2. Open the newest Markdown report and read `Triage Summary` first.
+3. Record relevant findings if needed.
+4. Convert important findings into production fix tasks.
+5. Apply fixes in the relevant production repository, not in `web-audit-lab`.
+6. Re-run the audit to validate the fix.
+
+Not every `info` finding needs a production task. Prioritize all `error` findings, most `warning` findings, and only meaningful `info` findings.
+
 ## MCP Setup
 
 MCP server config is stored in `.vscode/mcp.json` and uses:
@@ -147,9 +167,11 @@ MCP server config is stored in `.vscode/mcp.json` and uses:
 4. Review issue sections by category in the same Markdown report.
 5. Review `reports/<site-id>/*.json` when raw detailed data is needed.
 6. Review `screenshots/<site-id>/*` for visual evidence.
-7. Produce findings using `docs/FINDINGS.md` format.
-8. Convert findings into fix tasks for the relevant production repository.
-9. Re-run audits after fixes to confirm regressions are resolved.
+7. Produce findings using `docs/FINDINGS.md` format when raw findings need to be recorded.
+8. Convert important findings into production fix tasks using `docs/PRODUCTION_FIX_TASKS.md`.
+9. Apply fixes only in the relevant production repository.
+10. Re-run audits after fixes to confirm regressions are resolved.
 
 ## Future Improvement (Simple, Not Implemented)
+
 Current reports are already grouped per site. A safe next step is adding an optional lightweight index file per run (for example a small `reports/index.json`) to simplify history browsing across many audits.

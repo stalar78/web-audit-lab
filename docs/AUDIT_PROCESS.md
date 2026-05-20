@@ -69,12 +69,13 @@ Performance signals in this workspace are lightweight triage metrics, not Lighth
 3. Review the recommended review order.
 4. Review top issues by severity and category.
 5. Review SEO/technical/accessibility/performance issue sections in the Markdown report.
-6. Review broken internal link sections and prioritize high-traffic navigation paths.
-7. Open JSON report (`audit-<timestamp>.json`) only if raw fields/details are needed.
-8. Open desktop screenshots in `screenshots/<site-id>/`.
-9. Open mobile screenshots in `screenshots/<site-id>/mobile/`.
-10. Check desktop and mobile layout consistency across key pages.
-11. Cross-check screenshot issues with report errors and reported page issues.
+6. If performance warnings include failed requests, inspect the `Failed resources` list in Markdown/JSON for exact URLs and failure reasons.
+7. Review broken internal link sections and prioritize high-traffic navigation paths.
+8. Open JSON report (`audit-<timestamp>.json`) only if raw fields/details are needed.
+9. Open desktop screenshots in `screenshots/<site-id>/`.
+10. Open mobile screenshots in `screenshots/<site-id>/mobile/`.
+11. Check desktop and mobile layout consistency across key pages.
+12. Cross-check screenshot issues with report errors and reported page issues.
 
 ## 5. Log Raw Findings When Needed
 

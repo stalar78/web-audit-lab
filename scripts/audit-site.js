@@ -249,6 +249,7 @@ function getDefaultPerformance() {
     return {
         requestsTotal: 0,
         failedRequests: 0,
+        failedResources: [],
         resourceCounts: {
             document: 0,
             script: 0,
@@ -1553,6 +1554,18 @@ function renderMarkdownReport(site, generatedAt, siteResults, summary, triage) {
                 );
             }
         }
+        if (result.performance.failedResources.length > 0) {
+            lines.push("  - Failed resources:");
+            for (const failedResource of result.performance.failedResources) {
+                lines.push(
+                    `    - [${failedResource.resourceType}] ${failedResource.method} ${failedResource.url} — ${failedResource.failureText}${
+                        failedResource.status === null
+                            ? ""
+                            : ` (status: ${failedResource.status})`
+                    }`
+                );
+            }
+        }
         lines.push("- Mobile responsive:");
         lines.push(
             `  - Enabled: ${result.responsive.mobile.enabled ? "Yes" : "No"}`
@@ -1711,6 +1724,7 @@ async function auditPage(
     const performanceState = {
         requestsTotal: 0,
         failedRequests: 0,
+        failedResources: [],
         resourceCounts: getDefaultPerformance().resourceCounts,
         resourceMap: new Map(),
         resourcesMissingTransferSize: 0
@@ -1784,10 +1798,20 @@ async function auditPage(
             status: null,
             transferSizeBytes: 0
         };
+        const knownStatus = existing.status === null ? null : existing.status;
 
         existing.status = null;
         existing.transferSizeBytes = 0;
         performanceState.resourceMap.set(request, existing);
+
+        performanceState.failedResources.push({
+            url: request.url(),
+            resourceType: normalizeResourceType(request.resourceType()),
+            method: request.method(),
+            failureText:
+                (request.failure() && request.failure().errorText) || "Unknown request failure",
+            status: knownStatus
+        });
     });
 
     let mobileAuditCompleted = false;
@@ -1926,7 +1950,8 @@ async function auditPage(
 
         result.performance = {
             requestsTotal: performanceState.requestsTotal,
-            failedRequests: performanceState.failedRequests,
+            failedRequests: performanceState.failedResources.length,
+            failedResources: performanceState.failedResources,
             resourceCounts: performanceState.resourceCounts,
             transferSizeBytes,
             transferSizeKb,
