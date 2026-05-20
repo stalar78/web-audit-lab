@@ -80,6 +80,18 @@ Multiple ids are also supported:
 
 - `SITE_ID=localkit,stalarvision`
 
+Optional for link-heavy pages:
+
+- `LINK_CHECK_LIMIT=<positive-integer>` limits how many internal links are checked per page.
+- If omitted, all internal links are checked.
+- Invalid values are ignored with a warning and audit continues in unlimited mode.
+
+Example:
+
+```bat
+cmd /c "set LINK_CHECK_LIMIT=20&&npm run audit"
+```
+
 ## Output Locations
 
 - Reports: `reports/<site-id>/`

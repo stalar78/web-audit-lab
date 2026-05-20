@@ -52,6 +52,25 @@ function getScreenshotFileName(pagePath) {
     return `${pagePath === "/" ? "home" : pagePath.replace(/\//g, "_")}.png`;
 }
 
+function getLinkCheckLimit() {
+    const rawLimit = process.env.LINK_CHECK_LIMIT;
+
+    if (!rawLimit) {
+        return null;
+    }
+
+    const parsed = Number.parseInt(rawLimit, 10);
+
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+        console.warn(
+            `Invalid LINK_CHECK_LIMIT value: "${rawLimit}". Expected a positive integer. Falling back to unlimited link checks.`
+        );
+        return null;
+    }
+
+    return parsed;
+}
+
 function normalizeText(value) {
     if (typeof value !== "string") {
         return null;
@@ -224,7 +243,13 @@ async function checkInternalLinkStatus(requestContext, resolvedUrl, linkStatusCa
     }
 }
 
-async function buildLinksData(page, site, pageUrl, linkStatusCache) {
+async function buildLinksData(
+    page,
+    site,
+    pageUrl,
+    linkStatusCache,
+    linkCheckLimit
+) {
     const siteOrigin = new URL(site.url).origin;
     const anchorItems = await page
         .locator("a")
@@ -273,9 +298,20 @@ async function buildLinksData(page, site, pageUrl, linkStatusCache) {
         items
     };
 
+    let checkedInternalCount = 0;
+
     for (const item of items) {
         if (item.kind === "internal") {
             linksSummary.internal += 1;
+
+            if (
+                typeof linkCheckLimit === "number" &&
+                checkedInternalCount >= linkCheckLimit
+            ) {
+                item.reason = `Skipped because LINK_CHECK_LIMIT=${linkCheckLimit} was reached.`;
+                linksSummary.skipped += 1;
+                continue;
+            }
 
             const check = await checkInternalLinkStatus(
                 page.request,
@@ -290,6 +326,7 @@ async function buildLinksData(page, site, pageUrl, linkStatusCache) {
             }
 
             linksSummary.checked += 1;
+            checkedInternalCount += 1;
             if (check.ok === false) {
                 linksSummary.broken += 1;
             }
@@ -665,7 +702,13 @@ function renderMarkdownReport(site, generatedAt, siteResults, summary) {
     return lines.join("\n");
 }
 
-async function auditPage(browser, site, pagePath, linkStatusCache) {
+async function auditPage(
+    browser,
+    site,
+    pagePath,
+    linkStatusCache,
+    linkCheckLimit
+) {
     const url = normalizeUrl(site.url, pagePath);
     const page = await browser.newPage({
         viewport: {
@@ -711,9 +754,10 @@ async function auditPage(browser, site, pagePath, linkStatusCache) {
 
     try {
         const response = await page.goto(url, {
-            waitUntil: "networkidle",
+            waitUntil: "domcontentloaded",
             timeout: 45000
         });
+        await page.waitForTimeout(2000);
 
         result.status = response ? response.status() : null;
         result.title = await page.title();
@@ -743,7 +787,13 @@ async function auditPage(browser, site, pagePath, linkStatusCache) {
             )
             .catch(() => []);
 
-        result.links = await buildLinksData(page, site, url, linkStatusCache);
+        result.links = await buildLinksData(
+            page,
+            site,
+            url,
+            linkStatusCache,
+            linkCheckLimit
+        );
 
         const rawSeo = {
             canonical: await getAttributeSafe(page, 'link[rel="canonical"]', "href"),
@@ -810,16 +860,23 @@ async function main() {
 
     const runTimestampIso = new Date().toISOString();
     const reportTimestamp = toReportTimestamp(runTimestampIso);
-    const linkStatusCache = new Map();
+    const linkCheckLimit = getLinkCheckLimit();
 
     for (const site of selectedSites) {
         console.log(`\nAuditing: ${site.name}`);
         const siteResults = [];
+        const linkStatusCache = new Map();
 
         for (const pagePath of site.pages) {
             console.log(`  ${pagePath}`);
 
-            const result = await auditPage(browser, site, pagePath, linkStatusCache);
+            const result = await auditPage(
+                browser,
+                site,
+                pagePath,
+                linkStatusCache,
+                linkCheckLimit
+            );
             siteResults.push(result);
         }
 
