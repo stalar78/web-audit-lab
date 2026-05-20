@@ -1,4 +1,4 @@
-﻿# Audit Process
+# Audit Process
 
 This document defines the standard workflow for running audits in this workspace and turning findings into production tasks.
 
@@ -7,7 +7,8 @@ This document defines the standard workflow for running audits in this workspace
 1. Open `configs/sites.json`.
 2. Before adding or editing targets, check `configs/sites.example.json` for the expected schema.
 3. Identify the site `id`, base `url`, and required `pages`.
-4. Confirm you are auditing public/staging URLs only (never edit production code from this repo).
+4. Confirm you are auditing public/staging URLs only.
+5. Remember: never edit production code from this repository.
 
 ## 2. Select Target Site
 
@@ -61,49 +62,82 @@ Automated checks currently include:
 
 Performance signals in this workspace are lightweight triage metrics, not Lighthouse performance scores.
 
-## 4. Review Screenshots
+## 4. Review the Report
 
 1. Open `reports/<site-id>/` and read the newest Markdown report (`audit-<timestamp>.md`) first.
-2. Read `## Triage Summary` first to prioritize severe and category-specific issues.
-3. Review SEO/technical/accessibility/performance issue sections in the Markdown report.
-4. Review broken internal link sections and prioritize high-traffic navigation paths.
-5. Open JSON report (`audit-<timestamp>.json`) only if raw fields/details are needed.
-6. Open desktop screenshots in `screenshots/<site-id>/`.
-7. Open mobile screenshots in `screenshots/<site-id>/mobile/`.
-8. Check desktop and mobile layout consistency across key pages.
-9. Spot obvious visual defects:
-   - broken sections;
-   - overlapping content;
-   - hidden text;
-   - missing images/icons;
-   - unexpected blank states.
-10. Cross-check screenshot issues with report errors and reported page issues.
+2. Read `## Triage Summary` before the full page-by-page details.
+3. Review the recommended review order.
+4. Review top issues by severity and category.
+5. Review SEO/technical/accessibility/performance issue sections in the Markdown report.
+6. Review broken internal link sections and prioritize high-traffic navigation paths.
+7. Open JSON report (`audit-<timestamp>.json`) only if raw fields/details are needed.
+8. Open desktop screenshots in `screenshots/<site-id>/`.
+9. Open mobile screenshots in `screenshots/<site-id>/mobile/`.
+10. Check desktop and mobile layout consistency across key pages.
+11. Cross-check screenshot issues with report errors and reported page issues.
 
-## 5. Log Findings
+## 5. Log Raw Findings When Needed
 
-1. Use `docs/FINDINGS.md` template for each issue.
-2. Include concrete evidence:
-   - screenshot path(s);
-   - report JSON entry;
-   - exact URL/page path.
-3. Assign severity and status.
+Use `docs/FINDINGS.md` when you need to record raw findings or observations.
 
-## 6. Convert Findings to Production Fix Tasks
+A raw finding is useful when:
 
-For each validated finding, create a task in the target production repository tracker with:
+- the issue needs manual confirmation;
+- there are duplicate symptoms;
+- the finding may or may not become a production task;
+- you need a lightweight audit log.
 
-- clear title: `[Audit][Site][Severity] Short issue`;
-- page URL and reproduction steps;
+Include concrete evidence:
+
+- screenshot path(s);
+- Markdown report path;
+- JSON report path or exact JSON field if needed;
+- exact URL/page path.
+
+## 6. Convert Important Findings to Production Fix Tasks
+
+After reviewing `Triage Summary`, convert important findings into production fix tasks using `docs/PRODUCTION_FIX_TASKS.md`.
+
+Create production fix tasks for:
+
+- all `error` or `critical` findings;
+- most `warning` findings;
+- `info` findings only when they represent meaningful business, SEO, accessibility, legal, UX, or performance value.
+
+Do not create production tasks for every `info` finding automatically.
+
+A good production fix task must include:
+
+- clear title;
+- severity;
+- category;
+- source report;
+- evidence;
+- affected site and page;
 - expected vs actual behavior;
-- evidence links (screenshot/report);
-- suggested implementation direction;
-- acceptance criteria;
-- owner and due date.
+- recommended fix;
+- target production repository;
+- suggested agent;
+- validation steps;
+- status.
 
 Important: this repository is audit-only. Production fixes must be implemented in the proper website repository.
 
-## 7. Re-Audit After Fixes
+## 7. Apply Fixes Outside This Repository
+
+Use the task from `docs/PRODUCTION_FIX_TASKS.md` as the handoff to the implementation agent.
+
+Implementation should happen in the target production repository, for example:
+
+- `site-stalarvision`;
+- `localkit`;
+- another website repository.
+
+Do not change production website code from `web-audit-lab`.
+
+## 8. Re-Audit After Fixes
 
 1. Re-run the same scope (`SITE_ID` and pages).
-2. Compare new report/screenshots to previous run.
-3. Mark findings as `Fixed` or `Needs follow-up` in tracking.
+2. Compare new report/screenshots to the previous run.
+3. Confirm the finding is gone, reduced in severity, or intentionally accepted as risk.
+4. Mark the production fix task as `verified`, `accepted-risk`, or `needs-follow-up`.
