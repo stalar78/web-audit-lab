@@ -1,0 +1,21 @@
+{
+    "name": "web-audit-lab",
+    "version": "1.0.0",
+    "description": "External MCP and Playwright audit workspace for multiple websites.",
+    "main": "scripts/audit-site.js",
+    "scripts": {
+        "audit": "node scripts/audit-site.js"
+    },
+    "keywords": [
+        "playwright",
+        "mcp",
+        "audit",
+        "qa",
+        "web"
+    ],
+    "author": "",
+    "license": "ISC",
+    "devDependencies": {
+        "playwright": "^1.60.0"
+    }
+}

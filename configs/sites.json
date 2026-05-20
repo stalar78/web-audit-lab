@@ -1,0 +1,39 @@
+{
+    "sites": [
+        {
+            "id": "stalarvision",
+            "name": "Stalarvision",
+            "url": "https://stalarvision.ru/",
+            "pages": [
+                "/",
+                "/privacy",
+                "/terms",
+                "/404"
+            ]
+        },
+        {
+            "id": "localkit",
+            "name": "LocalKit",
+            "url": "https://localkit.ru/",
+            "pages": [
+                "/"
+            ]
+        },
+        {
+            "id": "lawyer-demo",
+            "name": "Lawyer Demo",
+            "url": "https://lawyer.demo.localkit.ru/",
+            "pages": [
+                "/"
+            ]
+        },
+        {
+            "id": "dentist-demo",
+            "name": "Dentist Demo",
+            "url": "https://dentist.demo.localkit.ru/",
+            "pages": [
+                "/"
+            ]
+        }
+    ]
+}
