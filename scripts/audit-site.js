@@ -3,6 +3,11 @@ const path = require("path");
 const { chromium } = require("playwright");
 
 const sitesConfig = require("../configs/sites.json");
+const STABILIZATION_WAIT_MS = 2000;
+const MOBILE_VIEWPORT = {
+    width: 390,
+    height: 844
+};
 
 function toReportTimestamp(isoString) {
     return isoString.replace(/[:.]/g, "-");
@@ -164,6 +169,103 @@ function getDefaultLinks() {
         skipped: 0,
         items: []
     };
+}
+
+function getDefaultResponsive() {
+    return {
+        mobile: {
+            viewport: {
+                width: MOBILE_VIEWPORT.width,
+                height: MOBILE_VIEWPORT.height
+            },
+            screenshotPath: null,
+            documentWidth: null,
+            viewportWidth: null,
+            bodyScrollWidth: null,
+            hasHorizontalOverflow: false,
+            overflowAmount: 0,
+            visibleTextLength: null,
+            errors: []
+        }
+    };
+}
+
+async function auditMobileResponsive(browser, site, pagePath, url) {
+    const mobilePage = await browser.newPage({
+        viewport: {
+            width: MOBILE_VIEWPORT.width,
+            height: MOBILE_VIEWPORT.height
+        }
+    });
+
+    const mobileResult = getDefaultResponsive().mobile;
+
+    try {
+        await mobilePage.goto(url, {
+            waitUntil: "domcontentloaded",
+            timeout: 45000
+        });
+        await mobilePage.waitForTimeout(STABILIZATION_WAIT_MS);
+
+        const metrics = await mobilePage.evaluate(() => {
+            const docEl = document.documentElement;
+            const body = document.body;
+            const documentWidth = docEl ? docEl.scrollWidth : 0;
+            const viewportWidth =
+                window.innerWidth || (docEl ? docEl.clientWidth : 0) || 0;
+            const bodyScrollWidth = body ? body.scrollWidth : 0;
+            const maxScrollWidth = Math.max(documentWidth, bodyScrollWidth);
+            const overflowAmount = Math.max(0, maxScrollWidth - viewportWidth);
+            const visibleTextLength = ((body && body.innerText) || "")
+                .replace(/\s+/g, " ")
+                .trim().length;
+
+            return {
+                documentWidth,
+                viewportWidth,
+                bodyScrollWidth,
+                hasHorizontalOverflow: overflowAmount > 0,
+                overflowAmount,
+                visibleTextLength
+            };
+        });
+
+        mobileResult.documentWidth = metrics.documentWidth;
+        mobileResult.viewportWidth = metrics.viewportWidth;
+        mobileResult.bodyScrollWidth = metrics.bodyScrollWidth;
+        mobileResult.hasHorizontalOverflow = metrics.hasHorizontalOverflow;
+        mobileResult.overflowAmount = metrics.overflowAmount;
+        mobileResult.visibleTextLength = metrics.visibleTextLength;
+
+        const mobileScreenshotDir = path.join(
+            process.cwd(),
+            "screenshots",
+            site.id,
+            "mobile"
+        );
+        ensureDir(mobileScreenshotDir);
+
+        const screenshotFileName = getScreenshotFileName(pagePath);
+        const mobileScreenshotPath = path.join(
+            mobileScreenshotDir,
+            screenshotFileName
+        );
+        mobileResult.screenshotPath = path.relative(
+            process.cwd(),
+            mobileScreenshotPath
+        );
+
+        await mobilePage.screenshot({
+            path: mobileScreenshotPath,
+            fullPage: true
+        });
+    } catch (error) {
+        mobileResult.errors.push(error.message);
+    } finally {
+        await mobilePage.close();
+    }
+
+    return mobileResult;
 }
 
 function classifyLink(href, resolvedUrl, siteOrigin) {
@@ -490,6 +592,40 @@ function buildIssues(result) {
         }
     }
 
+    const mobile = result.responsive.mobile;
+
+    if (mobile.errors.length > 0) {
+        for (const mobileError of mobile.errors) {
+            addIssue(
+                issues,
+                "error",
+                "responsive",
+                `Mobile audit failed: ${mobileError}`
+            );
+        }
+    } else {
+        if (mobile.hasHorizontalOverflow) {
+            addIssue(
+                issues,
+                "warning",
+                "responsive",
+                `Mobile horizontal overflow detected (${mobile.overflowAmount}px).`
+            );
+        }
+
+        if (
+            typeof mobile.visibleTextLength === "number" &&
+            mobile.visibleTextLength < 100
+        ) {
+            addIssue(
+                issues,
+                "info",
+                "responsive",
+                `Low visible text length on mobile (${mobile.visibleTextLength} characters).`
+            );
+        }
+    }
+
     return issues;
 }
 
@@ -570,6 +706,32 @@ function buildSiteSummary(siteResults) {
         (result) => result.links.broken > 0
     ).length;
 
+    const pagesWithResponsiveIssues = siteResults.filter((result) =>
+        result.issues.some((issue) => issue.category === "responsive")
+    ).length;
+
+    const totalResponsiveWarnings = siteResults.reduce(
+        (count, result) =>
+            count +
+            result.issues.filter(
+                (issue) =>
+                    issue.category === "responsive" &&
+                    issue.severity === "warning"
+            ).length,
+        0
+    );
+
+    const totalResponsiveErrors = siteResults.reduce(
+        (count, result) =>
+            count +
+            result.issues.filter(
+                (issue) =>
+                    issue.category === "responsive" &&
+                    issue.severity === "error"
+            ).length,
+        0
+    );
+
     return {
         totalPagesAudited: siteResults.length,
         successfulPages,
@@ -584,7 +746,10 @@ function buildSiteSummary(siteResults) {
         totalInternalLinks,
         totalExternalLinks,
         totalBrokenLinks,
-        pagesWithBrokenLinks
+        pagesWithBrokenLinks,
+        pagesWithResponsiveIssues,
+        totalResponsiveWarnings,
+        totalResponsiveErrors
     };
 }
 
@@ -613,6 +778,9 @@ function renderMarkdownReport(site, generatedAt, siteResults, summary) {
         `- Total external links: ${summary.totalExternalLinks}`,
         `- Total broken internal links: ${summary.totalBrokenLinks}`,
         `- Pages with broken links: ${summary.pagesWithBrokenLinks}`,
+        `- Pages with responsive issues: ${summary.pagesWithResponsiveIssues}`,
+        `- Total responsive warnings: ${summary.totalResponsiveWarnings}`,
+        `- Total responsive errors: ${summary.totalResponsiveErrors}`,
         "",
         "## Page Results"
     ];
@@ -636,7 +804,50 @@ function renderMarkdownReport(site, generatedAt, siteResults, summary) {
         lines.push(`- Images without alt count: ${result.imagesWithoutAlt.length}`);
         lines.push(`- Screenshot path: ${result.screenshotPath}`);
         lines.push(
+            `- Mobile screenshot path: ${result.responsive.mobile.screenshotPath || "N/A"}`
+        );
+        lines.push(
             `- Link summary: total=${result.links.total}, internal=${result.links.internal}, external=${result.links.external}, special=${result.links.special}, empty=${result.links.empty}, checked=${result.links.checked}, broken=${result.links.broken}, skipped=${result.links.skipped}`
+        );
+        lines.push("- Mobile responsive:");
+        lines.push(
+            `  - Viewport: ${result.responsive.mobile.viewport.width}x${result.responsive.mobile.viewport.height}`
+        );
+        lines.push(
+            `  - Document width: ${
+                result.responsive.mobile.documentWidth === null
+                    ? "N/A"
+                    : result.responsive.mobile.documentWidth
+            }`
+        );
+        lines.push(
+            `  - Viewport width: ${
+                result.responsive.mobile.viewportWidth === null
+                    ? "N/A"
+                    : result.responsive.mobile.viewportWidth
+            }`
+        );
+        lines.push(
+            `  - Body scroll width: ${
+                result.responsive.mobile.bodyScrollWidth === null
+                    ? "N/A"
+                    : result.responsive.mobile.bodyScrollWidth
+            }`
+        );
+        lines.push(
+            `  - Horizontal overflow: ${
+                result.responsive.mobile.hasHorizontalOverflow ? "Yes" : "No"
+            }`
+        );
+        lines.push(
+            `  - Overflow amount: ${result.responsive.mobile.overflowAmount}px`
+        );
+        lines.push(
+            `  - Visible text length: ${
+                result.responsive.mobile.visibleTextLength === null
+                    ? "N/A"
+                    : result.responsive.mobile.visibleTextLength
+            }`
         );
         lines.push("- SEO signals:");
         lines.push(
@@ -730,6 +941,7 @@ async function auditPage(
         links: getDefaultLinks(),
         imagesWithoutAlt: [],
         screenshotPath: null,
+        responsive: getDefaultResponsive(),
         seo: null,
         issues: [],
         errors: [],
@@ -752,12 +964,14 @@ async function auditPage(
         });
     });
 
+    let mobileAuditCompleted = false;
+
     try {
         const response = await page.goto(url, {
             waitUntil: "domcontentloaded",
             timeout: 45000
         });
-        await page.waitForTimeout(2000);
+        await page.waitForTimeout(STABILIZATION_WAIT_MS);
 
         result.status = response ? response.status() : null;
         result.title = await page.title();
@@ -814,7 +1028,6 @@ async function auditPage(
         };
 
         result.seo = buildSeoData(result, rawSeo);
-        result.issues = buildIssues(result);
 
         const screenshotDir = path.join(process.cwd(), "screenshots", site.id);
 
@@ -827,6 +1040,16 @@ async function auditPage(
             path: screenshotFullPath,
             fullPage: true
         });
+
+        result.responsive.mobile = await auditMobileResponsive(
+            browser,
+            site,
+            pagePath,
+            url
+        );
+        mobileAuditCompleted = true;
+
+        result.issues = buildIssues(result);
     } catch (error) {
         result.errors.push({
             type: "audit",
@@ -835,6 +1058,20 @@ async function auditPage(
     } finally {
         if (!result.seo) {
             result.seo = buildDefaultSeo();
+        }
+
+        if (!result.responsive) {
+            result.responsive = getDefaultResponsive();
+        }
+
+        if (!mobileAuditCompleted) {
+            result.responsive.mobile = await auditMobileResponsive(
+                browser,
+                site,
+                pagePath,
+                url
+            );
+            mobileAuditCompleted = true;
         }
 
         if (result.issues.length === 0) {

@@ -9,6 +9,7 @@ This repository is used to run repeatable website audits and capture evidence:
 - automated browser checks via Playwright;
 - basic SEO/technical signals (status, metadata, canonical, lang, viewport, Open Graph);
 - internal link status checks for broken navigation targets;
+- responsive mobile layout signals (overflow and visible-content sanity checks);
 - MCP-assisted manual inspection;
 - JSON reports for machine-readable findings;
 - screenshots for visual proof.
@@ -98,8 +99,10 @@ cmd /c "set LINK_CHECK_LIMIT=20&&npm run audit"
   - Per-site JSON report: `audit-YYYY-MM-DDTHH-mm-ss-sssZ.json`
   - Per-site Markdown report: `audit-YYYY-MM-DDTHH-mm-ss-sssZ.md`
   - Includes SEO/technical issue summaries, per-page issue lists, and broken internal link findings
-- Screenshots: `screenshots/<site-id>/`
-  - One full-page PNG per audited path
+- Screenshots:
+  - Desktop: `screenshots/<site-id>/`
+  - Mobile: `screenshots/<site-id>/mobile/`
+  - One full-page PNG per audited path for each viewport
 
 ## Find Latest Markdown Reports
 

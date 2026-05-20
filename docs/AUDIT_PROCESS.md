@@ -52,8 +52,9 @@ Automated checks currently include:
 - `h1` extraction;
 - link count;
 - basic image alt checks (`img` without alt or empty alt);
+- responsive mobile layout signals (horizontal overflow and visible text length);
 - browser console/page errors;
-- full-page screenshots.
+- full-page desktop and mobile screenshots.
 
 ## 4. Review Screenshots
 
@@ -61,15 +62,16 @@ Automated checks currently include:
 2. Review SEO/technical issue sections in the Markdown report before manual visual checks.
 3. Review broken internal link sections in the Markdown report and prioritize high-traffic navigation paths.
 4. Open JSON report (`audit-<timestamp>.json`) only if raw fields/details are needed.
-5. Open `screenshots/<site-id>/`.
-6. Check desktop layout consistency across key pages.
-7. Spot obvious visual defects:
+5. Open desktop screenshots in `screenshots/<site-id>/`.
+6. Open mobile screenshots in `screenshots/<site-id>/mobile/`.
+7. Check desktop and mobile layout consistency across key pages.
+8. Spot obvious visual defects:
    - broken sections;
    - overlapping content;
    - hidden text;
    - missing images/icons;
    - unexpected blank states.
-8. Cross-check screenshot issues with report errors and reported page issues.
+9. Cross-check screenshot issues with report errors and reported page issues.
 
 ## 5. Log Findings
 

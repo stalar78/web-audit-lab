@@ -28,9 +28,11 @@ Use this checklist during every audit pass.
 ## Mobile Layout
 
 - [ ] No horizontal overflow at common mobile widths.
-- [ ] Key content remains visible without clipping.
+- [ ] Key content remains visible without clipping on mobile screenshots.
 - [ ] Primary CTA remains usable on small screens.
 - [ ] Navigation/menu is operable on mobile viewport.
+- [ ] Mobile screenshot under `screenshots/<site-id>/mobile/` is reviewed manually.
+- [ ] Mobile text/content density is readable and not unexpectedly empty.
 
 ## Navigation
 
