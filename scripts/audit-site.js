@@ -4,6 +4,10 @@ const { chromium } = require("playwright");
 
 const sitesConfig = require("../configs/sites.json");
 
+function toReportTimestamp(isoString) {
+    return isoString.replace(/[:.]/g, "-");
+}
+
 function getSelectedSites(allSites) {
     const rawSiteId = process.env.SITE_ID;
 
@@ -44,6 +48,97 @@ function normalizeUrl(baseUrl, pagePath) {
     return `${cleanBase}${cleanPath}`;
 }
 
+function getScreenshotFileName(pagePath) {
+    return `${pagePath === "/" ? "home" : pagePath.replace(/\//g, "_")}.png`;
+}
+
+function buildSiteSummary(siteResults) {
+    const successfulPages = siteResults.filter(
+        (result) =>
+            typeof result.status === "number" &&
+            result.status >= 200 &&
+            result.status < 400 &&
+            result.errors.length === 0
+    ).length;
+
+    const pagesWithErrors = siteResults.filter(
+        (result) =>
+            result.errors.length > 0 ||
+            typeof result.status !== "number" ||
+            result.status >= 400
+    ).length;
+
+    const totalErrors = siteResults.reduce(
+        (count, result) => count + result.errors.length,
+        0
+    );
+
+    const totalImagesWithoutAlt = siteResults.reduce(
+        (count, result) => count + result.imagesWithoutAlt.length,
+        0
+    );
+
+    return {
+        totalPagesAudited: siteResults.length,
+        successfulPages,
+        pagesWithErrors,
+        totalErrors,
+        totalImagesWithoutAlt
+    };
+}
+
+function renderMarkdownReport(site, generatedAt, siteResults, summary) {
+    const lines = [
+        "# Website Audit Report",
+        "",
+        `- Site Name: ${site.name}`,
+        `- Site ID: ${site.id}`,
+        `- Base URL: ${site.url}`,
+        `- Timestamp: ${generatedAt}`,
+        "",
+        "## Summary",
+        "",
+        `- Total pages audited: ${summary.totalPagesAudited}`,
+        `- Successful pages: ${summary.successfulPages}`,
+        `- Pages with errors: ${summary.pagesWithErrors}`,
+        `- Total console/page/audit errors: ${summary.totalErrors}`,
+        `- Total images without alt: ${summary.totalImagesWithoutAlt}`,
+        "",
+        "## Page Results"
+    ];
+
+    for (const result of siteResults) {
+        lines.push("");
+        lines.push(`### ${result.pagePath}`);
+        lines.push(`- Full URL: ${result.url}`);
+        lines.push(`- HTTP status: ${result.status === null ? "N/A" : result.status}`);
+        lines.push(`- Title: ${result.title || "N/A"}`);
+        lines.push(
+            `- Meta description present: ${
+                result.description && result.description.trim() ? "Yes" : "No"
+            }`
+        );
+        lines.push(
+            `- H1 values: ${result.h1.length > 0 ? result.h1.join(" | ") : "None"}`
+        );
+        lines.push(`- Links count: ${result.linksCount}`);
+        lines.push(`- Images without alt count: ${result.imagesWithoutAlt.length}`);
+        lines.push(`- Screenshot path: ${result.screenshotPath}`);
+
+        if (result.errors.length > 0) {
+            lines.push("- Errors:");
+            for (const errorItem of result.errors) {
+                lines.push(`  - [${errorItem.type}] ${errorItem.message}`);
+            }
+        } else {
+            lines.push("- Errors: None");
+        }
+    }
+
+    lines.push("");
+    return lines.join("\n");
+}
+
 async function auditPage(browser, site, pagePath) {
     const url = normalizeUrl(site.url, pagePath);
     const page = await browser.newPage({
@@ -64,6 +159,7 @@ async function auditPage(browser, site, pagePath) {
         h1: [],
         linksCount: 0,
         imagesWithoutAlt: [],
+        screenshotPath: null,
         errors: [],
         timestamp: new Date().toISOString()
     };
@@ -125,12 +221,12 @@ async function auditPage(browser, site, pagePath) {
         );
 
         ensureDir(screenshotDir);
+        const screenshotFileName = getScreenshotFileName(pagePath);
+        const screenshotFullPath = path.join(screenshotDir, screenshotFileName);
+        result.screenshotPath = path.relative(process.cwd(), screenshotFullPath);
 
         await page.screenshot({
-            path: path.join(
-                screenshotDir,
-                `${pagePath === "/" ? "home" : pagePath.replace(/\//g, "_")}.png`
-            ),
+            path: screenshotFullPath,
             fullPage: true
         });
     } catch (error) {
@@ -156,33 +252,58 @@ async function main() {
         headless: true
     });
 
-    const allResults = [];
+    const runTimestampIso = new Date().toISOString();
+    const reportTimestamp = toReportTimestamp(runTimestampIso);
 
     for (const site of selectedSites) {
         console.log(`\nAuditing: ${site.name}`);
+        const siteResults = [];
 
         for (const pagePath of site.pages) {
             console.log(`  ${pagePath}`);
 
             const result = await auditPage(browser, site, pagePath);
-            allResults.push(result);
+            siteResults.push(result);
         }
+
+        const summary = buildSiteSummary(siteResults);
+        const siteReportDir = path.join(process.cwd(), "reports", site.id);
+        ensureDir(siteReportDir);
+
+        const jsonReportPath = path.join(
+            siteReportDir,
+            `audit-${reportTimestamp}.json`
+        );
+
+        const markdownReportPath = path.join(
+            siteReportDir,
+            `audit-${reportTimestamp}.md`
+        );
+
+        const jsonPayload = {
+            reportTitle: "Website Audit Report",
+            siteName: site.name,
+            siteId: site.id,
+            baseUrl: site.url,
+            timestamp: runTimestampIso,
+            summary,
+            pages: siteResults
+        };
+
+        fs.writeFileSync(jsonReportPath, JSON.stringify(jsonPayload, null, 2), "utf8");
+        fs.writeFileSync(
+            markdownReportPath,
+            renderMarkdownReport(site, runTimestampIso, siteResults, summary),
+            "utf8"
+        );
+
+        console.log(`  JSON report: ${jsonReportPath}`);
+        console.log(`  Markdown report: ${markdownReportPath}`);
     }
 
     await browser.close();
 
-    const reportsDir = path.join(process.cwd(), "reports");
-    ensureDir(reportsDir);
-
-    const reportPath = path.join(
-        reportsDir,
-        `audit-${new Date().toISOString().replace(/[:.]/g, "-")}.json`
-    );
-
-    fs.writeFileSync(reportPath, JSON.stringify(allResults, null, 2), "utf8");
-
     console.log(`\nAudit completed.`);
-    console.log(`Report saved to: ${reportPath}`);
 }
 
 main().catch((error) => {

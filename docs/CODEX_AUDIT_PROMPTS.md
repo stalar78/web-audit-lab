@@ -2,6 +2,17 @@
 
 Reusable prompts for running audits in this workspace.
 
+## Config Validation Reminder
+
+Before editing audit targets:
+
+- Compare `configs/sites.json` (active list) with `configs/sites.example.json` (schema reference).
+
+After config changes:
+
+- Run full audit: `cmd /c npm run audit`
+- Run single-site audit: `cmd /c "set SITE_ID=<site-id>&&npm run audit"`
+
 ## Full Website Audit
 
 ```text

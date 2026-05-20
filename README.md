@@ -80,8 +80,9 @@ Multiple ids are also supported:
 
 ## Output Locations
 
-- Reports: `reports/`
-  - File format: timestamped JSON (`audit-YYYY-MM-DDTHH-mm-ss-sssZ.json`)
+- Reports: `reports/<site-id>/`
+  - Per-site JSON report: `audit-YYYY-MM-DDTHH-mm-ss-sssZ.json`
+  - Per-site Markdown report: `audit-YYYY-MM-DDTHH-mm-ss-sssZ.md`
 - Screenshots: `screenshots/<site-id>/`
   - One full-page PNG per audited path
 
@@ -95,15 +96,12 @@ MCP server config is stored in `.vscode/mcp.json` and uses:
 
 1. Update `configs/sites.json` with target sites/pages.
 2. Run `npm run audit` (or filter with `SITE_ID`).
-3. Review `reports/*.json` and `screenshots/<site-id>/*`.
-4. Produce findings using `docs/FINDINGS.md` format.
-5. Convert findings into fix tasks for the relevant production repository.
-6. Re-run audits after fixes to confirm regressions are resolved.
+3. Review `reports/<site-id>/*.md` first for quick summary.
+4. Review `reports/<site-id>/*.json` when raw detailed data is needed.
+5. Review `screenshots/<site-id>/*` for visual evidence.
+6. Produce findings using `docs/FINDINGS.md` format.
+7. Convert findings into fix tasks for the relevant production repository.
+8. Re-run audits after fixes to confirm regressions are resolved.
 
 ## Future Improvement (Simple, Not Implemented)
-
-Current reports are saved as flat files in `reports/`. A safe next step is to save reports under per-site folders, for example:
-
-- `reports/<site-id>/audit-<timestamp>.json`
-
-This keeps history easier to navigate without introducing a complex reporting system.
+Current reports are already grouped per site. A safe next step is adding an optional lightweight index file per run (for example a small `reports/index.json`) to simplify history browsing across many audits.
