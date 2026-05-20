@@ -1,4 +1,4 @@
-const fs = require("fs");
+﻿const fs = require("fs");
 const path = require("path");
 const { chromium } = require("playwright");
 
@@ -70,6 +70,32 @@ async function getAttributeSafe(page, selector, attribute) {
         .catch(() => null);
 }
 
+function buildDefaultSeo() {
+    return {
+        titlePresent: false,
+        titleLength: 0,
+        descriptionPresent: false,
+        descriptionLength: 0,
+        h1Count: 0,
+        canonical: null,
+        canonicalPresent: false,
+        robots: null,
+        robotsPresent: false,
+        htmlLang: null,
+        htmlLangPresent: false,
+        viewport: null,
+        viewportPresent: false,
+        openGraph: {
+            title: null,
+            description: null,
+            image: null,
+            url: null,
+            type: null
+        },
+        openGraphPresent: false
+    };
+}
+
 function buildSeoData(result, rawSeo) {
     const titleText = normalizeText(result.title);
     const descriptionText = normalizeText(result.description);
@@ -105,6 +131,188 @@ function buildSeoData(result, rawSeo) {
         openGraph,
         openGraphPresent
     };
+}
+
+function getDefaultLinks() {
+    return {
+        total: 0,
+        internal: 0,
+        external: 0,
+        special: 0,
+        empty: 0,
+        checked: 0,
+        broken: 0,
+        skipped: 0,
+        items: []
+    };
+}
+
+function classifyLink(href, resolvedUrl, siteOrigin) {
+    const rawHref = typeof href === "string" ? href.trim() : "";
+    const lowerHref = rawHref.toLowerCase();
+
+    if (!rawHref || rawHref === "#") {
+        return {
+            kind: "empty",
+            reason: "Missing, empty, or placeholder # href."
+        };
+    }
+
+    if (
+        lowerHref.startsWith("mailto:") ||
+        lowerHref.startsWith("tel:") ||
+        lowerHref.startsWith("javascript:") ||
+        rawHref.startsWith("#")
+    ) {
+        return {
+            kind: "special",
+            reason: "Special link type (mailto/tel/javascript/anchor)."
+        };
+    }
+
+    if (!resolvedUrl) {
+        return {
+            kind: "special",
+            reason: "Invalid or unresolved URL."
+        };
+    }
+
+    try {
+        const resolvedOrigin = new URL(resolvedUrl).origin;
+        if (resolvedOrigin === siteOrigin) {
+            return { kind: "internal", reason: undefined };
+        }
+
+        return { kind: "external", reason: "External origin." };
+    } catch (error) {
+        return {
+            kind: "special",
+            reason: "Invalid URL after resolution."
+        };
+    }
+}
+
+async function checkInternalLinkStatus(requestContext, resolvedUrl, linkStatusCache) {
+    if (linkStatusCache.has(resolvedUrl)) {
+        return linkStatusCache.get(resolvedUrl);
+    }
+
+    try {
+        const response = await requestContext.get(resolvedUrl, {
+            timeout: 20000,
+            failOnStatusCode: false
+        });
+
+        const status = response ? response.status() : null;
+        const item = {
+            status,
+            ok: typeof status === "number" ? status < 400 : false,
+            reason: status === null ? "No HTTP response received." : undefined
+        };
+
+        linkStatusCache.set(resolvedUrl, item);
+        return item;
+    } catch (error) {
+        const item = {
+            status: null,
+            ok: false,
+            reason: `Request failed: ${error.message}`
+        };
+
+        linkStatusCache.set(resolvedUrl, item);
+        return item;
+    }
+}
+
+async function buildLinksData(page, site, pageUrl, linkStatusCache) {
+    const siteOrigin = new URL(site.url).origin;
+    const anchorItems = await page
+        .locator("a")
+        .evaluateAll((links) =>
+            links.map((link) => ({
+                href: link.getAttribute("href"),
+                text: (link.textContent || "").trim()
+            }))
+        )
+        .catch(() => []);
+
+    const items = anchorItems.map((item) => {
+        const rawHref = typeof item.href === "string" ? item.href.trim() : null;
+        let resolvedUrl = null;
+
+        if (rawHref && rawHref !== "#" && !rawHref.startsWith("#")) {
+            try {
+                resolvedUrl = new URL(rawHref, pageUrl).toString();
+            } catch (error) {
+                resolvedUrl = null;
+            }
+        }
+
+        const classification = classifyLink(rawHref, resolvedUrl, siteOrigin);
+
+        return {
+            href: rawHref,
+            text: item.text || "",
+            resolvedUrl,
+            kind: classification.kind,
+            status: null,
+            ok: null,
+            reason: classification.reason
+        };
+    });
+
+    const linksSummary = {
+        total: items.length,
+        internal: 0,
+        external: 0,
+        special: 0,
+        empty: 0,
+        checked: 0,
+        broken: 0,
+        skipped: 0,
+        items
+    };
+
+    for (const item of items) {
+        if (item.kind === "internal") {
+            linksSummary.internal += 1;
+
+            const check = await checkInternalLinkStatus(
+                page.request,
+                item.resolvedUrl,
+                linkStatusCache
+            );
+
+            item.status = check.status;
+            item.ok = check.ok;
+            if (check.reason) {
+                item.reason = check.reason;
+            }
+
+            linksSummary.checked += 1;
+            if (check.ok === false) {
+                linksSummary.broken += 1;
+            }
+            continue;
+        }
+
+        if (item.kind === "external") {
+            linksSummary.external += 1;
+            linksSummary.skipped += 1;
+            continue;
+        }
+
+        if (item.kind === "special") {
+            linksSummary.special += 1;
+            linksSummary.skipped += 1;
+            continue;
+        }
+
+        linksSummary.empty += 1;
+        linksSummary.skipped += 1;
+    }
+
+    return linksSummary;
 }
 
 function addIssue(issues, severity, category, message) {
@@ -196,6 +404,55 @@ function buildIssues(result) {
         );
     }
 
+    if (result.links.empty > 0) {
+        addIssue(
+            issues,
+            "info",
+            "technical",
+            `Empty links found (${result.links.empty}).`
+        );
+    }
+
+    if (result.links.special > 0) {
+        addIssue(
+            issues,
+            "info",
+            "technical",
+            `Special links found (${result.links.special}).`
+        );
+    }
+
+    const brokenInternalItems = result.links.items.filter(
+        (item) => item.kind === "internal" && item.ok === false
+    );
+    const linkIssueSeen = new Set();
+
+    for (const item of brokenInternalItems) {
+        const identifier = `${item.resolvedUrl || item.href}|${item.status}|${item.reason || ""}`;
+        if (linkIssueSeen.has(identifier)) {
+            continue;
+        }
+        linkIssueSeen.add(identifier);
+
+        if (typeof item.status === "number" && item.status >= 400) {
+            addIssue(
+                issues,
+                "warning",
+                "technical",
+                `Internal link returns HTTP ${item.status}: ${item.resolvedUrl || item.href}`
+            );
+        } else {
+            addIssue(
+                issues,
+                "error",
+                "technical",
+                `Internal link check failed: ${item.resolvedUrl || item.href}${
+                    item.reason ? ` (${item.reason})` : ""
+                }`
+            );
+        }
+    }
+
     return issues;
 }
 
@@ -252,6 +509,30 @@ function buildSiteSummary(siteResults) {
         (result) => result.issues.length > 0
     ).length;
 
+    const totalLinks = siteResults.reduce(
+        (count, result) => count + result.links.total,
+        0
+    );
+
+    const totalInternalLinks = siteResults.reduce(
+        (count, result) => count + result.links.internal,
+        0
+    );
+
+    const totalExternalLinks = siteResults.reduce(
+        (count, result) => count + result.links.external,
+        0
+    );
+
+    const totalBrokenLinks = siteResults.reduce(
+        (count, result) => count + result.links.broken,
+        0
+    );
+
+    const pagesWithBrokenLinks = siteResults.filter(
+        (result) => result.links.broken > 0
+    ).length;
+
     return {
         totalPagesAudited: siteResults.length,
         successfulPages,
@@ -261,7 +542,12 @@ function buildSiteSummary(siteResults) {
         totalIssues,
         totalSeoWarnings,
         totalSeoErrors,
-        pagesWithIssues
+        pagesWithIssues,
+        totalLinks,
+        totalInternalLinks,
+        totalExternalLinks,
+        totalBrokenLinks,
+        pagesWithBrokenLinks
     };
 }
 
@@ -285,6 +571,11 @@ function renderMarkdownReport(site, generatedAt, siteResults, summary) {
         `- Total SEO warnings: ${summary.totalSeoWarnings}`,
         `- Total SEO errors: ${summary.totalSeoErrors}`,
         `- Pages with issues: ${summary.pagesWithIssues}`,
+        `- Total links: ${summary.totalLinks}`,
+        `- Total internal links: ${summary.totalInternalLinks}`,
+        `- Total external links: ${summary.totalExternalLinks}`,
+        `- Total broken internal links: ${summary.totalBrokenLinks}`,
+        `- Pages with broken links: ${summary.pagesWithBrokenLinks}`,
         "",
         "## Page Results"
     ];
@@ -307,6 +598,9 @@ function renderMarkdownReport(site, generatedAt, siteResults, summary) {
         lines.push(`- Links count: ${result.linksCount}`);
         lines.push(`- Images without alt count: ${result.imagesWithoutAlt.length}`);
         lines.push(`- Screenshot path: ${result.screenshotPath}`);
+        lines.push(
+            `- Link summary: total=${result.links.total}, internal=${result.links.internal}, external=${result.links.external}, special=${result.links.special}, empty=${result.links.empty}, checked=${result.links.checked}, broken=${result.links.broken}, skipped=${result.links.skipped}`
+        );
         lines.push("- SEO signals:");
         lines.push(
             `  - Title present: ${result.seo.titlePresent ? "Yes" : "No"} (length: ${result.seo.titleLength})`
@@ -351,13 +645,27 @@ function renderMarkdownReport(site, generatedAt, siteResults, summary) {
         } else {
             lines.push("- Issues: None");
         }
+
+        const brokenInternalLinks = result.links.items.filter(
+            (item) => item.kind === "internal" && item.ok === false
+        );
+        if (brokenInternalLinks.length > 0) {
+            lines.push("- Broken internal links:");
+            for (const item of brokenInternalLinks) {
+                lines.push(
+                    `  - ${item.resolvedUrl || item.href} (status: ${
+                        item.status === null ? "N/A" : item.status
+                    }${item.reason ? `; reason: ${item.reason}` : ""})`
+                );
+            }
+        }
     }
 
     lines.push("");
     return lines.join("\n");
 }
 
-async function auditPage(browser, site, pagePath) {
+async function auditPage(browser, site, pagePath, linkStatusCache) {
     const url = normalizeUrl(site.url, pagePath);
     const page = await browser.newPage({
         viewport: {
@@ -376,6 +684,7 @@ async function auditPage(browser, site, pagePath) {
         description: null,
         h1: [],
         linksCount: 0,
+        links: getDefaultLinks(),
         imagesWithoutAlt: [],
         screenshotPath: null,
         seo: null,
@@ -434,6 +743,8 @@ async function auditPage(browser, site, pagePath) {
             )
             .catch(() => []);
 
+        result.links = await buildLinksData(page, site, url, linkStatusCache);
+
         const rawSeo = {
             canonical: await getAttributeSafe(page, 'link[rel="canonical"]', "href"),
             robots: await getAttributeSafe(page, 'meta[name="robots"]', "content"),
@@ -455,11 +766,7 @@ async function auditPage(browser, site, pagePath) {
         result.seo = buildSeoData(result, rawSeo);
         result.issues = buildIssues(result);
 
-        const screenshotDir = path.join(
-            process.cwd(),
-            "screenshots",
-            site.id
-        );
+        const screenshotDir = path.join(process.cwd(), "screenshots", site.id);
 
         ensureDir(screenshotDir);
         const screenshotFileName = getScreenshotFileName(pagePath);
@@ -477,19 +784,7 @@ async function auditPage(browser, site, pagePath) {
         });
     } finally {
         if (!result.seo) {
-            result.seo = buildSeoData(result, {
-                canonical: null,
-                robots: null,
-                htmlLang: null,
-                viewport: null,
-                openGraph: {
-                    title: null,
-                    description: null,
-                    image: null,
-                    url: null,
-                    type: null
-                }
-            });
+            result.seo = buildDefaultSeo();
         }
 
         if (result.issues.length === 0) {
@@ -515,6 +810,7 @@ async function main() {
 
     const runTimestampIso = new Date().toISOString();
     const reportTimestamp = toReportTimestamp(runTimestampIso);
+    const linkStatusCache = new Map();
 
     for (const site of selectedSites) {
         console.log(`\nAuditing: ${site.name}`);
@@ -523,7 +819,7 @@ async function main() {
         for (const pagePath of site.pages) {
             console.log(`  ${pagePath}`);
 
-            const result = await auditPage(browser, site, pagePath);
+            const result = await auditPage(browser, site, pagePath, linkStatusCache);
             siteResults.push(result);
         }
 
@@ -531,15 +827,9 @@ async function main() {
         const siteReportDir = path.join(process.cwd(), "reports", site.id);
         ensureDir(siteReportDir);
 
-        const jsonReportPath = path.join(
-            siteReportDir,
-            `audit-${reportTimestamp}.json`
-        );
+        const jsonReportPath = path.join(siteReportDir, `audit-${reportTimestamp}.json`);
 
-        const markdownReportPath = path.join(
-            siteReportDir,
-            `audit-${reportTimestamp}.md`
-        );
+        const markdownReportPath = path.join(siteReportDir, `audit-${reportTimestamp}.md`);
 
         const jsonPayload = {
             reportTitle: "Website Audit Report",
@@ -564,7 +854,7 @@ async function main() {
 
     await browser.close();
 
-    console.log(`\nAudit completed.`);
+    console.log("\nAudit completed.");
 }
 
 main().catch((error) => {

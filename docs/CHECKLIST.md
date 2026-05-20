@@ -38,6 +38,9 @@ Use this checklist during every audit pass.
 - [ ] Header/footer navigation is consistent.
 - [ ] Logo links to homepage.
 - [ ] Breadcrumbs/back links (if present) behave correctly.
+- [ ] Important navigation links are present on key pages.
+- [ ] No broken internal links in primary navigation/footer/CTA areas.
+- [ ] External links are reviewed manually for correctness and trust.
 
 ## Content
 
