@@ -4,6 +4,34 @@ const { chromium } = require("playwright");
 
 const sitesConfig = require("../configs/sites.json");
 
+function getSelectedSites(allSites) {
+    const rawSiteId = process.env.SITE_ID;
+
+    if (!rawSiteId) {
+        return allSites;
+    }
+
+    const targetIds = rawSiteId
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean);
+
+    const selectedSites = allSites.filter((site) => targetIds.includes(site.id));
+    const missingIds = targetIds.filter(
+        (id) => !selectedSites.some((site) => site.id === id)
+    );
+
+    if (missingIds.length > 0) {
+        console.error(`Unknown SITE_ID value(s): ${missingIds.join(", ")}`);
+        console.error(
+            `Available site ids: ${allSites.map((site) => site.id).join(", ")}`
+        );
+        return [];
+    }
+
+    return selectedSites;
+}
+
 function ensureDir(dirPath) {
     if (!fs.existsSync(dirPath)) {
         fs.mkdirSync(dirPath, { recursive: true });
@@ -118,13 +146,19 @@ async function auditPage(browser, site, pagePath) {
 }
 
 async function main() {
+    const selectedSites = getSelectedSites(sitesConfig.sites);
+
+    if (selectedSites.length === 0) {
+        process.exit(1);
+    }
+
     const browser = await chromium.launch({
         headless: true
     });
 
     const allResults = [];
 
-    for (const site of sitesConfig.sites) {
+    for (const site of selectedSites) {
         console.log(`\nAuditing: ${site.name}`);
 
         for (const pagePath of site.pages) {
