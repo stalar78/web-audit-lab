@@ -62,10 +62,11 @@ Use this checklist during every audit pass.
 
 ## Performance Signals
 
-- [ ] First screen renders without long blank delay.
-- [ ] Large media is reasonably optimized.
-- [ ] No obvious layout thrashing/reflow during load.
-- [ ] Third-party scripts do not visibly block core content.
+- [ ] High request count pages are reviewed (`>80` info, `>150` warning).
+- [ ] High transfer size pages are reviewed (`>2MB` info, `>5MB` warning).
+- [ ] Image/script request-heavy pages are reviewed (`>30` each info).
+- [ ] Failed resource requests are investigated.
+- [ ] Largest resources from report are manually reviewed for optimization opportunities.
 
 ## Regression Checks
 

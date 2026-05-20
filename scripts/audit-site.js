@@ -245,6 +245,49 @@ function getDefaultAccessibility() {
     };
 }
 
+function getDefaultPerformance() {
+    return {
+        requestsTotal: 0,
+        failedRequests: 0,
+        resourceCounts: {
+            document: 0,
+            script: 0,
+            stylesheet: 0,
+            image: 0,
+            font: 0,
+            xhr: 0,
+            fetch: 0,
+            other: 0
+        },
+        transferSizeBytes: 0,
+        transferSizeKb: 0,
+        largestResources: [],
+        timings: {
+            domContentLoadedMs: null,
+            loadEventMs: null
+        },
+        notes: []
+    };
+}
+
+function normalizeResourceType(resourceType) {
+    const known = new Set([
+        "document",
+        "script",
+        "stylesheet",
+        "image",
+        "font",
+        "xhr",
+        "fetch"
+    ]);
+
+    if (known.has(resourceType)) {
+        return resourceType;
+    }
+
+    return "other";
+}
+
 async function collectAccessibilityData(page) {
     return page.evaluate(() => {
         const trimText = (value) =>
@@ -507,6 +550,52 @@ async function auditMobileResponsive(browser, site, pagePath, url) {
     }
 
     return mobileResult;
+}
+
+async function collectPerformanceTimings(page) {
+    return page
+        .evaluate(() => {
+            const navEntry = performance.getEntriesByType("navigation")[0];
+            if (navEntry) {
+                return {
+                    domContentLoadedMs:
+                        typeof navEntry.domContentLoadedEventEnd === "number"
+                            ? Math.round(navEntry.domContentLoadedEventEnd)
+                            : null,
+                    loadEventMs:
+                        typeof navEntry.loadEventEnd === "number" && navEntry.loadEventEnd > 0
+                            ? Math.round(navEntry.loadEventEnd)
+                            : null
+                };
+            }
+
+            if (performance && performance.timing) {
+                const timing = performance.timing;
+                const navigationStart = timing.navigationStart || 0;
+                const dclEnd = timing.domContentLoadedEventEnd || 0;
+                const loadEnd = timing.loadEventEnd || 0;
+
+                return {
+                    domContentLoadedMs:
+                        dclEnd > 0 && navigationStart > 0
+                            ? dclEnd - navigationStart
+                            : null,
+                    loadEventMs:
+                        loadEnd > 0 && navigationStart > 0
+                            ? loadEnd - navigationStart
+                            : null
+                };
+            }
+
+            return {
+                domContentLoadedMs: null,
+                loadEventMs: null
+            };
+        })
+        .catch(() => ({
+            domContentLoadedMs: null,
+            loadEventMs: null
+        }));
 }
 
 function classifyLink(href, resolvedUrl, siteOrigin) {
@@ -887,6 +976,67 @@ function buildIssues(result) {
         addIssue(issues, "info", "accessibility", "Footer landmark is missing.");
     }
 
+    const performance = result.performance;
+
+    if (performance.requestsTotal > 150) {
+        addIssue(
+            issues,
+            "warning",
+            "performance",
+            `High total request count (${performance.requestsTotal}).`
+        );
+    } else if (performance.requestsTotal > 80) {
+        addIssue(
+            issues,
+            "info",
+            "performance",
+            `Elevated total request count (${performance.requestsTotal}).`
+        );
+    }
+
+    if (performance.transferSizeBytes > 5 * 1024 * 1024) {
+        addIssue(
+            issues,
+            "warning",
+            "performance",
+            `High transfer size (${performance.transferSizeKb} KB).`
+        );
+    } else if (performance.transferSizeBytes > 2 * 1024 * 1024) {
+        addIssue(
+            issues,
+            "info",
+            "performance",
+            `Elevated transfer size (${performance.transferSizeKb} KB).`
+        );
+    }
+
+    if (performance.resourceCounts.image > 30) {
+        addIssue(
+            issues,
+            "info",
+            "performance",
+            `High image request count (${performance.resourceCounts.image}).`
+        );
+    }
+
+    if (performance.resourceCounts.script > 30) {
+        addIssue(
+            issues,
+            "info",
+            "performance",
+            `High script request count (${performance.resourceCounts.script}).`
+        );
+    }
+
+    if (performance.failedRequests > 0) {
+        addIssue(
+            issues,
+            "warning",
+            "performance",
+            `Failed resource requests detected (${performance.failedRequests}).`
+        );
+    }
+
     const mobile = result.responsive.mobile;
 
     if (!mobile.enabled || mobile.skipped) {
@@ -1057,6 +1207,48 @@ function buildSiteSummary(siteResults) {
         0
     );
 
+    const pagesWithPerformanceIssues = siteResults.filter((result) =>
+        result.issues.some((issue) => issue.category === "performance")
+    ).length;
+
+    const totalPerformanceWarnings = siteResults.reduce(
+        (count, result) =>
+            count +
+            result.issues.filter(
+                (issue) =>
+                    issue.category === "performance" &&
+                    issue.severity === "warning"
+            ).length,
+        0
+    );
+
+    const totalPerformanceErrors = siteResults.reduce(
+        (count, result) =>
+            count +
+            result.issues.filter(
+                (issue) =>
+                    issue.category === "performance" &&
+                    issue.severity === "error"
+            ).length,
+        0
+    );
+
+    const totalRequests = siteResults.reduce(
+        (count, result) => count + result.performance.requestsTotal,
+        0
+    );
+
+    const totalFailedRequests = siteResults.reduce(
+        (count, result) => count + result.performance.failedRequests,
+        0
+    );
+
+    const totalTransferSizeKb = Number(
+        siteResults
+            .reduce((count, result) => count + result.performance.transferSizeKb, 0)
+            .toFixed(2)
+    );
+
     return {
         totalPagesAudited: siteResults.length,
         successfulPages,
@@ -1077,7 +1269,13 @@ function buildSiteSummary(siteResults) {
         totalResponsiveErrors,
         pagesWithAccessibilityIssues,
         totalAccessibilityWarnings,
-        totalAccessibilityErrors
+        totalAccessibilityErrors,
+        pagesWithPerformanceIssues,
+        totalPerformanceWarnings,
+        totalPerformanceErrors,
+        totalRequests,
+        totalFailedRequests,
+        totalTransferSizeKb
     };
 }
 
@@ -1112,6 +1310,12 @@ function renderMarkdownReport(site, generatedAt, siteResults, summary) {
         `- Pages with accessibility issues: ${summary.pagesWithAccessibilityIssues}`,
         `- Total accessibility warnings: ${summary.totalAccessibilityWarnings}`,
         `- Total accessibility errors: ${summary.totalAccessibilityErrors}`,
+        `- Pages with performance issues: ${summary.pagesWithPerformanceIssues}`,
+        `- Total performance warnings: ${summary.totalPerformanceWarnings}`,
+        `- Total performance errors: ${summary.totalPerformanceErrors}`,
+        `- Total requests: ${summary.totalRequests}`,
+        `- Total failed requests: ${summary.totalFailedRequests}`,
+        `- Total transfer size: ${summary.totalTransferSizeKb} KB`,
         "",
         "## Page Results"
     ];
@@ -1146,6 +1350,43 @@ function renderMarkdownReport(site, generatedAt, siteResults, summary) {
         lines.push(
             `- Landmarks: header=${result.accessibility.landmarks.header ? "Yes" : "No"}, main=${result.accessibility.landmarks.main ? "Yes" : "No"}, nav=${result.accessibility.landmarks.nav ? "Yes" : "No"}, footer=${result.accessibility.landmarks.footer ? "Yes" : "No"}`
         );
+        lines.push("- Performance summary:");
+        lines.push(
+            `  - Requests: total=${result.performance.requestsTotal}, failed=${result.performance.failedRequests}`
+        );
+        lines.push(
+            `  - Transfer size: ${result.performance.transferSizeKb} KB`
+        );
+        lines.push(
+            `  - Resource counts: document=${result.performance.resourceCounts.document}, script=${result.performance.resourceCounts.script}, stylesheet=${result.performance.resourceCounts.stylesheet}, image=${result.performance.resourceCounts.image}, font=${result.performance.resourceCounts.font}, xhr=${result.performance.resourceCounts.xhr}, fetch=${result.performance.resourceCounts.fetch}, other=${result.performance.resourceCounts.other}`
+        );
+        lines.push(
+            `  - Timings: DOMContentLoaded=${
+                result.performance.timings.domContentLoadedMs === null
+                    ? "N/A"
+                    : `${result.performance.timings.domContentLoadedMs} ms`
+            }, Load=${
+                result.performance.timings.loadEventMs === null
+                    ? "N/A"
+                    : `${result.performance.timings.loadEventMs} ms`
+            }`
+        );
+        if (result.performance.notes.length > 0) {
+            lines.push("  - Notes:");
+            for (const note of result.performance.notes) {
+                lines.push(`    - ${note}`);
+            }
+        }
+        if (result.performance.largestResources.length > 0) {
+            lines.push("  - Largest resources:");
+            for (const resource of result.performance.largestResources.slice(0, 5)) {
+                lines.push(
+                    `    - ${resource.transferSizeBytes} B [${resource.resourceType}] ${resource.url} (status: ${
+                        resource.status === null ? "N/A" : resource.status
+                    })`
+                );
+            }
+        }
         lines.push("- Mobile responsive:");
         lines.push(
             `  - Enabled: ${result.responsive.mobile.enabled ? "Yes" : "No"}`
@@ -1294,10 +1535,19 @@ async function auditPage(
         screenshotPath: null,
         responsive: getDefaultResponsive(),
         accessibility: getDefaultAccessibility(),
+        performance: getDefaultPerformance(),
         seo: null,
         issues: [],
         errors: [],
         timestamp: new Date().toISOString()
+    };
+
+    const performanceState = {
+        requestsTotal: 0,
+        failedRequests: 0,
+        resourceCounts: getDefaultPerformance().resourceCounts,
+        resourceMap: new Map(),
+        resourcesMissingTransferSize: 0
     };
 
     page.on("console", (msg) => {
@@ -1314,6 +1564,64 @@ async function auditPage(
             type: "pageerror",
             message: error.message
         });
+    });
+
+    page.on("request", (request) => {
+        const resourceType = normalizeResourceType(request.resourceType());
+        performanceState.requestsTotal += 1;
+        performanceState.resourceCounts[resourceType] += 1;
+        performanceState.resourceMap.set(request, {
+            url: request.url(),
+            resourceType,
+            status: null,
+            transferSizeBytes: 0
+        });
+    });
+
+    page.on("response", async (response) => {
+        const request = response.request();
+        const existing = performanceState.resourceMap.get(request) || {
+            url: request.url(),
+            resourceType: normalizeResourceType(request.resourceType()),
+            status: null,
+            transferSizeBytes: 0
+        };
+
+        existing.status = response.status();
+
+        let transferSize = 0;
+        try {
+            const headerValue = await response.headerValue("content-length");
+            if (headerValue) {
+                const parsed = Number.parseInt(headerValue, 10);
+                if (Number.isFinite(parsed) && parsed > 0) {
+                    transferSize = parsed;
+                }
+            }
+        } catch (error) {
+            transferSize = 0;
+        }
+
+        existing.transferSizeBytes = transferSize;
+        if (transferSize === 0) {
+            performanceState.resourcesMissingTransferSize += 1;
+        }
+
+        performanceState.resourceMap.set(request, existing);
+    });
+
+    page.on("requestfailed", (request) => {
+        performanceState.failedRequests += 1;
+        const existing = performanceState.resourceMap.get(request) || {
+            url: request.url(),
+            resourceType: normalizeResourceType(request.resourceType()),
+            status: null,
+            transferSizeBytes: 0
+        };
+
+        existing.status = null;
+        existing.transferSizeBytes = 0;
+        performanceState.resourceMap.set(request, existing);
     });
 
     let mobileAuditCompleted = false;
@@ -1415,6 +1723,52 @@ async function auditPage(
             mobileAuditCompleted = true;
         }
 
+        const timings = await collectPerformanceTimings(page);
+        const performanceResources = Array.from(
+            performanceState.resourceMap.values()
+        );
+        const transferSizeBytes = performanceResources.reduce(
+            (total, resource) => total + (resource.transferSizeBytes || 0),
+            0
+        );
+        const transferSizeKb = Number((transferSizeBytes / 1024).toFixed(2));
+        const largestResources = performanceResources
+            .slice()
+            .sort(
+                (a, b) =>
+                    (b.transferSizeBytes || 0) - (a.transferSizeBytes || 0)
+            )
+            .slice(0, 10)
+            .map((resource) => ({
+                url: resource.url,
+                resourceType: resource.resourceType,
+                status: resource.status,
+                transferSizeBytes: resource.transferSizeBytes || 0
+            }));
+
+        const notes = [];
+        if (performanceState.resourcesMissingTransferSize > 0) {
+            notes.push(
+                "Transfer size is approximate. Some resources did not expose content-length."
+            );
+        }
+        if (timings.domContentLoadedMs === null || timings.loadEventMs === null) {
+            notes.push(
+                "Some navigation timing metrics were unavailable for this page."
+            );
+        }
+
+        result.performance = {
+            requestsTotal: performanceState.requestsTotal,
+            failedRequests: performanceState.failedRequests,
+            resourceCounts: performanceState.resourceCounts,
+            transferSizeBytes,
+            transferSizeKb,
+            largestResources,
+            timings,
+            notes
+        };
+
         result.issues = buildIssues(result);
     } catch (error) {
         result.errors.push({
@@ -1432,6 +1786,10 @@ async function auditPage(
 
         if (!result.accessibility) {
             result.accessibility = getDefaultAccessibility();
+        }
+
+        if (!result.performance) {
+            result.performance = getDefaultPerformance();
         }
 
         if (mobileAuditEnabled && !mobileAuditCompleted) {
